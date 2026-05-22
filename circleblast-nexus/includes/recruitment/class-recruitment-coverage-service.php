@@ -40,7 +40,7 @@ final class CBNexus_Recruitment_Coverage_Service {
 		global $wpdb;
 
 		$cat_table = $wpdb->prefix . 'cb_recruitment_categories';
-		$categories = $wpdb->get_results("SELECT * FROM {$cat_table} ORDER BY sort_order ASC, priority DESC");
+		$categories = $wpdb->get_results("SELECT * FROM {$cat_table} ORDER BY title ASC");
 
 		if (empty($categories)) {
 			return [];

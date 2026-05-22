@@ -206,7 +206,7 @@ final class CBNexus_Portal_Admin_Recruitment {
 							<?php
 							global $wpdb;
 							$cat_table = $wpdb->prefix . 'cb_recruitment_categories';
-							$need_cats = $wpdb->get_results("SELECT id, title FROM {$cat_table} ORDER BY sort_order ASC, title ASC") ?: [];
+							$need_cats = $wpdb->get_results("SELECT id, title FROM {$cat_table} ORDER BY title ASC") ?: [];
 							foreach ($need_cats as $nc) : ?>
 								<option value="<?php echo esc_attr($nc->id); ?>"><?php echo esc_html($nc->title); ?></option>
 							<?php endforeach; ?>
@@ -364,7 +364,7 @@ final class CBNexus_Portal_Admin_Recruitment {
 						<?php
 						global $wpdb;
 						$cat_table_edit = $wpdb->prefix . 'cb_recruitment_categories';
-						$need_cats_edit = $wpdb->get_results("SELECT id, title FROM {$cat_table_edit} ORDER BY sort_order ASC, title ASC") ?: [];
+						$need_cats_edit = $wpdb->get_results("SELECT id, title FROM {$cat_table_edit} ORDER BY title ASC") ?: [];
 						?>
 						<select name="category_id" class="cbnexus-input" style="width:100%;">
 							<option value="0">—</option>

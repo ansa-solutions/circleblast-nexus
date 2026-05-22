@@ -177,7 +177,7 @@ final class CBNexus_Admin_Recruitment_Categories {
 		global $wpdb;
 		return $wpdb->get_results(
 			"SELECT * FROM {$wpdb->prefix}cb_recruitment_categories
-			 WHERE is_filled = 0 ORDER BY sort_order ASC, priority DESC"
+			 WHERE is_filled = 0 ORDER BY title ASC"
 		) ?: [];
 	}
 
@@ -197,7 +197,7 @@ final class CBNexus_Admin_Recruitment_Categories {
 		];
 
 		global $wpdb;
-		$categories = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}cb_recruitment_categories ORDER BY sort_order ASC, priority DESC") ?: [];
+		$categories = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}cb_recruitment_categories ORDER BY title ASC") ?: [];
 		$schedule   = get_option('cbnexus_recruit_blast_schedule', 'none');
 		$last_blast = get_option('cbnexus_last_recruit_blast', '');
 		$industries = CBNexus_Member_Service::get_industries();

@@ -284,7 +284,7 @@ final class CBNexus_Portal_Admin_Members {
 		}
 		global $wpdb;
 		$cat_table = $wpdb->prefix . 'cb_recruitment_categories';
-		$recruit_cats = $wpdb->get_results("SELECT id, title, industry FROM {$cat_table} ORDER BY sort_order ASC, title ASC") ?: [];
+		$recruit_cats = $wpdb->get_results("SELECT id, title, industry FROM {$cat_table} ORDER BY title ASC") ?: [];
 
 		// Ambassador dropdown data.
 		$active_members = CBNexus_Member_Repository::get_all_members('active');
@@ -623,7 +623,7 @@ final class CBNexus_Portal_Admin_Members {
 	private static function get_category_map(): array {
 		global $wpdb;
 		$table = $wpdb->prefix . 'cb_recruitment_categories';
-		$rows = $wpdb->get_results("SELECT id, title FROM {$table} ORDER BY sort_order ASC, title ASC");
+		$rows = $wpdb->get_results("SELECT id, title FROM {$table} ORDER BY title ASC");
 		$map = [];
 		if ($rows) {
 			foreach ($rows as $r) {

@@ -114,7 +114,7 @@ final class CBNexus_Referral_Form {
 		// Fetch recruitment categories for the dropdown.
 		global $wpdb;
 		$cat_table  = $wpdb->prefix . 'cb_recruitment_categories';
-		$categories = $wpdb->get_results("SELECT id, title FROM {$cat_table} ORDER BY sort_order ASC, title ASC") ?: [];
+		$categories = $wpdb->get_results("SELECT id, title FROM {$cat_table} ORDER BY title ASC") ?: [];
 		?>
 		<!-- Referral Modal Overlay -->
 		<div id="cbnexus-referral-overlay" class="cbnexus-referral-overlay"></div>

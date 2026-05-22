@@ -54,7 +54,7 @@ final class CBNexus_Directory {
 		// Recruitment categories for filter dropdown.
 		global $wpdb;
 		$cat_table = $wpdb->prefix . 'cb_recruitment_categories';
-		$recruit_cats = $wpdb->get_results("SELECT id, title FROM {$cat_table} ORDER BY sort_order ASC, title ASC") ?: [];
+		$recruit_cats = $wpdb->get_results("SELECT id, title FROM {$cat_table} ORDER BY title ASC") ?: [];
 
 		// Ghost cards for focus categories (monthly rotation).
 		$gaps = class_exists('CBNexus_Recruitment_Coverage_Service')
@@ -498,7 +498,7 @@ final class CBNexus_Directory {
 			return [];
 		}
 
-		$rows = $wpdb->get_results("SELECT id, title FROM {$table} ORDER BY sort_order ASC, title ASC");
+		$rows = $wpdb->get_results("SELECT id, title FROM {$table} ORDER BY title ASC");
 		$map  = [];
 		if ($rows) {
 			foreach ($rows as $r) {
