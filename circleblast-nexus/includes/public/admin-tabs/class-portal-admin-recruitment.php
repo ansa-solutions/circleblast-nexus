@@ -222,6 +222,7 @@ final class CBNexus_Portal_Admin_Recruitment {
 			<div class="cbnexus-admin-table-wrap">
 				<table class="cbnexus-admin-table">
 					<thead><tr>
+						<th style="width:60px;">Actions</th>
 						<th>Candidate</th>
 						<th>Company</th>
 						<th>Category</th>
@@ -229,13 +230,15 @@ final class CBNexus_Portal_Admin_Recruitment {
 						<th>Stage</th>
 						<th>Notes</th>
 						<th>Updated</th>
-						<th>Actions</th>
 					</tr></thead>
 					<tbody>
 					<?php if (empty($candidates)) : ?>
 						<tr><td colspan="8" class="cbnexus-admin-empty">No candidates yet.</td></tr>
 					<?php else : foreach ($candidates as $c) : ?>
 						<tr>
+							<td class="cbnexus-admin-actions-cell">
+								<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $c->id])); ?>" class="cbnexus-link">Edit</a>
+							</td>
 							<td>
 								<strong><?php echo esc_html($c->name); ?></strong>
 								<?php if ($c->email) : ?><div class="cbnexus-admin-meta"><?php echo esc_html($c->email); ?></div><?php endif; ?>
@@ -280,9 +283,6 @@ final class CBNexus_Portal_Admin_Recruitment {
 								<?php endif; ?>
 							</td>
 							<td class="cbnexus-admin-meta"><?php echo esc_html(date_i18n('M j', strtotime($c->updated_at))); ?></td>
-							<td class="cbnexus-admin-actions-cell">
-								<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $c->id])); ?>" class="cbnexus-link">Edit</a>
-							</td>
 						</tr>
 					<?php endforeach; endif; ?>
 					</tbody>
