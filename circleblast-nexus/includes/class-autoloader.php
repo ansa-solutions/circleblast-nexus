@@ -109,6 +109,12 @@ final class CBNexus_Autoloader {
 		// Recruitment Coverage (Phase 1)
 		'CBNexus_Recruitment_Coverage_Service' => 'includes/recruitment/class-recruitment-coverage-service.php',
 
+		// Recruitment Candidate Events (timeline)
+		'CBNexus_Candidate_Event_Repository'   => 'includes/recruitment/class-candidate-event-repository.php',
+
+		// Recruitment Settings (configurable thresholds + handoff email)
+		'CBNexus_Recruitment_Settings'         => 'includes/recruitment/class-recruitment-settings.php',
+
 		// Tokens (universal email action system)
 		'CBNexus_Token_Service' => 'includes/tokens/class-token-service.php',
 		'CBNexus_Token_Router'  => 'includes/tokens/class-token-router.php',

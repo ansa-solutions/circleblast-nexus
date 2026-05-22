@@ -163,6 +163,11 @@ final class CBNexus_Migration_Runner {
 				'class'  => 'CBNexus_Migration_024_Add_Meeting_Type',
 				'method' => 'up',
 			],
+			'027_create_candidate_events' => [
+				'file'   => CBNEXUS_PLUGIN_DIR . 'includes/migrations/versions/027-create-candidate-events.php',
+				'class'  => 'CBNexus_Migration_027_Create_Candidate_Events',
+				'method' => 'up',
+			],
 		];
 	}
 

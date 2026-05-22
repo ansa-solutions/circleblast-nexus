@@ -1,9 +1,10 @@
 <?php
 /**
- * Email Template: Recruitment - Visit Thank You + Feedback
+ * Email Template: Recruitment - Visit Thank You + Yes/No CTA
  *
  * Sent to a candidate when they are moved to the "Visited" stage.
- * Includes a thank-you and asks for their feedback on the experience.
+ * Includes a short thank-you and two tokenized buttons so the candidate
+ * can record whether they\'re interested without needing to reply.
  */
 
 defined('ABSPATH') || exit;
@@ -14,18 +15,22 @@ return [
 <p style="font-size:16px;color:#333;margin:0 0 16px;">Hi {{candidate_first_name}},</p>
 <p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 16px;">
 Thank you for visiting The Circle! We loved having you at our meeting and hope you enjoyed getting to know the group.</p>
-<p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 16px;">
-We\'d love to hear your thoughts on the experience. Your honest feedback helps us keep improving and helps us understand whether The Circle might be the right community for you.</p>
-<p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 8px;"><strong>A few quick questions:</strong></p>
-<ol style="font-size:15px;color:#333;line-height:1.8;margin:0 0 20px;padding-left:20px;">
-<li>What was your overall impression of the group?</li>
-<li>Did you make any connections that felt valuable?</li>
-<li>Is there anything we could do differently to improve the experience for visitors?</li>
-<li>Would you be interested in learning more about membership?</li>
-</ol>
-<p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 16px;">
-Simply reply to this email with your thoughts — no formal survey needed. We read every response.</p>
-{{visit_notes_block}}
-<p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 8px;">Thanks again for spending time with us. We hope to see you again soon!</p>
-<p style="font-size:15px;color:#333;margin:0;">— The Circle Team</p>',
+<p style="font-size:15px;color:#333;line-height:1.6;margin:0 0 20px;">
+We\'d like to know whether you see The Circle as a fit for you. Pick one of the buttons below — that\'s it, no form to fill out.</p>
+<table role="presentation" cellspacing="0" cellpadding="0" align="center" style="margin:24px auto;">
+<tr>
+<td style="padding-right:10px;">
+<table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="background-color:#16a34a;border-radius:6px;">
+<a href="{{fb_interested}}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;">I\'m Interested →</a>
+</td></tr></table>
+</td>
+<td style="padding-left:10px;">
+<table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="background-color:#6b7280;border-radius:6px;">
+<a href="{{fb_not_interested}}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;">Not for Me</a>
+</td></tr></table>
+</td>
+</tr></table>
+<p style="font-size:13px;color:#888;line-height:1.5;margin:24px 0 0;text-align:center;">
+Your response goes directly to {{followup_name}} — no pressure either way.</p>
+<p style="font-size:15px;color:#333;margin:24px 0 0;">— The Circle Team</p>',
 ];

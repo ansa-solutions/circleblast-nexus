@@ -82,7 +82,7 @@ final class CBNexus_Recruitment_Coverage_Service {
 	/**
 	 * Get summary stats across all categories.
 	 *
-	 * @return array{total: int, covered: int, partial: int, gaps: int, coverage_pct: float}
+	 * @return array{total:int, covered:int, partial:int, gaps:int, coverage_pct:float, capacity_filled:int, capacity_total:int}
 	 */
 	public static function get_summary(): array {
 		$categories = self::get_full_coverage();
@@ -105,12 +105,20 @@ final class CBNexus_Recruitment_Coverage_Service {
 			}
 		}
 
+		// Group capacity is decoupled from category count — track filled-of-N seats.
+		$active_members = CBNexus_Member_Repository::get_all_members('active');
+		$capacity_total = class_exists('CBNexus_Recruitment_Settings')
+			? CBNexus_Recruitment_Settings::get_capacity_total()
+			: 25;
+
 		return [
-			'total'        => $total,
-			'covered'      => $covered,
-			'partial'      => $partial,
-			'gaps'         => $gaps,
-			'coverage_pct' => $total > 0 ? round(($covered / $total) * 100, 1) : 0,
+			'total'           => $total,
+			'covered'         => $covered,
+			'partial'         => $partial,
+			'gaps'            => $gaps,
+			'coverage_pct'    => $total > 0 ? round(($covered / $total) * 100, 1) : 0,
+			'capacity_filled' => count($active_members),
+			'capacity_total'  => $capacity_total,
 		];
 	}
 
@@ -423,6 +431,17 @@ final class CBNexus_Recruitment_Coverage_Service {
 				'titles'   => array_map(function ($cat) { return $cat->title; }, $selected),
 			]);
 		}
+	}
+
+	/**
+	 * Public wrapper for compute_next_circleup_date so the recruitment-settings
+	 * helper can build the candidate invitation date+time without duplicating
+	 * the 4th-Friday formula.
+	 *
+	 * @return string Y-m-d
+	 */
+	public static function get_next_circleup_date_public(): string {
+		return self::compute_next_circleup_date();
 	}
 
 	/**

@@ -20,6 +20,103 @@ final class CBNexus_Portal_Admin_Recruitment {
 		'declined'  => 'Declined',
 	];
 
+	/** Days of inactivity in an active pre-decision stage before "needs follow-up" fires. */
+	const STALE_FOLLOWUP_DAYS = 14;
+
+	// ─── Action state (UI indicator helper) ─────────────────────────────
+
+	/**
+	 * Compute the recruiter-facing action state for a candidate row.
+	 * Returns one of: ['code' => 'clear'|'waiting'|'ready'|'attention', 'label' => string, 'color' => '#hex'].
+	 */
+	private static function get_action_state(object $c): array {
+		$stage = (string) $c->stage;
+		$updated_ts = strtotime((string) $c->updated_at);
+		$now = time();
+
+		// Decision stage: council-review window logic.
+		if ($stage === 'decision') {
+			$sent_at = get_option('cbnexus_council_review_sent_' . $c->id);
+			$hours = CBNexus_Recruitment_Settings::get_council_review_hours();
+			if ($sent_at) {
+				$opened_ts = strtotime($sent_at);
+				$elapsed_h = ($now - $opened_ts) / 3600;
+				if ($elapsed_h >= $hours) {
+					return [
+						'code'  => 'ready',
+						'label' => 'Council review window closed — ready to advance',
+						'color' => '#16a34a',
+					];
+				}
+				$left_h = max(0, $hours - $elapsed_h);
+				return [
+					'code'  => 'waiting',
+					'label' => 'Council review in progress (' . (int) ceil($left_h) . 'h left)',
+					'color' => '#ca8a04',
+				];
+			}
+			// No review email recorded — flag to send it.
+			return [
+				'code'  => 'attention',
+				'label' => 'Decision stage — council review not yet sent',
+				'color' => '#dc2626',
+			];
+		}
+
+		// Visited: did the candidate respond to the Interested/Not Interested email?
+		if ($stage === 'visited') {
+			$fb = get_option('cbnexus_visit_feedback_' . $c->id);
+			if (is_array($fb) && !empty($fb['answer'])) {
+				$ans = $fb['answer'];
+				if ($ans === 'interested') {
+					return [
+						'code'  => 'attention',
+						'label' => 'Candidate marked Interested — move to Decision',
+						'color' => '#16a34a',
+					];
+				}
+				if ($ans === 'not_interested') {
+					return [
+						'code'  => 'attention',
+						'label' => 'Candidate marked Not Interested — move to Declined',
+						'color' => '#6b7280',
+					];
+				}
+			}
+			// No response yet — flag if stale.
+			if ($updated_ts && ($now - $updated_ts) > self::STALE_FOLLOWUP_DAYS * 86400) {
+				return [
+					'code'  => 'attention',
+					'label' => 'No post-visit response — follow up',
+					'color' => '#dc2626',
+				];
+			}
+			return ['code' => 'waiting', 'label' => 'Awaiting candidate response', 'color' => '#ca8a04'];
+		}
+
+		// Other pre-accepted stages: flag if stale.
+		if (in_array($stage, ['referral', 'contacted', 'invited'], true)) {
+			if ($updated_ts && ($now - $updated_ts) > self::STALE_FOLLOWUP_DAYS * 86400) {
+				return [
+					'code'  => 'attention',
+					'label' => 'No movement in ' . self::STALE_FOLLOWUP_DAYS . '+ days — follow up',
+					'color' => '#dc2626',
+				];
+			}
+		}
+
+		return ['code' => 'clear', 'label' => '', 'color' => ''];
+	}
+
+	/** Inline HTML for the indicator chip — placed next to the stage select. */
+	private static function render_action_chip(array $state): string {
+		if (empty($state['code']) || $state['code'] === 'clear') { return ''; }
+		$icons = ['waiting' => '⏳', 'ready' => '✅', 'attention' => '🔴'];
+		$icon  = $icons[$state['code']] ?? '•';
+		return '<div title="' . esc_attr($state['label']) . '" style="margin-top:6px;font-size:11px;color:' . esc_attr($state['color']) . ';font-weight:600;line-height:1.3;">'
+			. $icon . ' ' . esc_html($state['label']) . '</div>';
+	}
+
 	// ─── Render ─────────────────────────────────────────────────────────
 
 	public static function render(): void {
@@ -168,6 +265,7 @@ final class CBNexus_Portal_Admin_Recruitment {
 										<?php endforeach; ?>
 									</select>
 								</form>
+								<?php echo self::render_action_chip(self::get_action_state($c)); ?>
 							</td>
 							<td class="cbnexus-admin-meta">
 								<?php echo esc_html($c->notes ?: '—'); ?>
@@ -297,7 +395,54 @@ final class CBNexus_Portal_Admin_Recruitment {
 						<span style="color:#a094a8;margin-left:6px;">(<?php echo esc_html(date_i18n('M j, Y', strtotime($fb['answered_at']))); ?>)</span>
 					</div>
 				<?php endif; ?>
+				<?php
+				$state = self::get_action_state($c);
+				if (!empty($state['code']) && $state['code'] !== 'clear') :
+				?>
+					<div style="margin-top:8px;padding:10px 14px;background:#fff;border:1px solid <?php echo esc_attr($state['color']); ?>;border-left:4px solid <?php echo esc_attr($state['color']); ?>;border-radius:6px;font-size:13px;color:<?php echo esc_attr($state['color']); ?>;font-weight:600;">
+						<?php echo esc_html($state['label']); ?>
+					</div>
+				<?php endif; ?>
 			</div>
+
+			<?php self::render_candidate_timeline((int) $c->id); ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render the per-candidate event timeline (stage changes, emails sent,
+	 * feedback received). Replaces the recruiter-targeted email log.
+	 */
+	private static function render_candidate_timeline(int $candidate_id): void {
+		$events = CBNexus_Candidate_Event_Repository::get_for_candidate($candidate_id, 100);
+		?>
+		<div class="cbnexus-card" style="margin-top:12px;">
+			<h3 style="margin:0 0 12px;">📜 Activity Timeline</h3>
+			<?php if (empty($events)) : ?>
+				<p class="cbnexus-admin-meta">No activity recorded yet.</p>
+			<?php else : ?>
+				<ul style="list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb;">
+				<?php foreach ($events as $ev) :
+					$icon_map = [
+						'stage_change'        => '➡️',
+						'email_sent'          => '✉️',
+						'email_skipped'       => '⚠️',
+						'feedback_received'   => '💬',
+						'council_review_sent' => '👥',
+					];
+					$icon = $icon_map[$ev->event_type] ?? '•';
+				?>
+					<li style="position:relative;padding:8px 0 8px 22px;font-size:13px;color:#333;">
+						<span style="position:absolute;left:-9px;top:10px;width:16px;height:16px;background:#fff;border:2px solid #c4b5d6;border-radius:50%;text-align:center;font-size:10px;line-height:12px;"><?php echo esc_html($icon); ?></span>
+						<div><?php echo esc_html($ev->message); ?></div>
+						<div class="cbnexus-admin-meta" style="font-size:11px;color:#9ca3af;margin-top:2px;">
+							<?php echo esc_html(date_i18n('M j, Y · g:i A', strtotime($ev->created_at))); ?>
+						</div>
+					</li>
+				<?php endforeach; ?>
+				</ul>
+			<?php endif; ?>
 		</div>
 		<?php
 	}
@@ -443,82 +588,34 @@ final class CBNexus_Portal_Admin_Recruitment {
 	/**
 	 * Recruitment pipeline automations triggered on stage transitions.
 	 *
-	 * - Any stage change → notify referrer
-	 * - Moved to "invited" → email the candidate with invitation
-	 * - Moved to "visited" → thank-you email to candidate with feedback request (once only)
-	 * - Moved to "accepted" → auto-create member account, send welcome email, notify referrer with congrats
+	 * Behavior (post-revamp):
+	 *   - Bob (recruiter) is NOT emailed. All "what just happened" lives on the
+	 *     candidate card as a timeline via CBNexus_Candidate_Event_Repository.
+	 *   - Invited  → send recruit_invitation to candidate AND to referrer (same body)
+	 *   - Visited  → send recruit_visited_thankyou with Interested / Not Interested buttons
+	 *   - Decision → send recruit_council_review to all active members (objection window)
+	 *   - Accepted → create member, welcome email, recruit_accepted to referrer,
+	 *                recruit_onboarding_handoff to the configured onboarding lead
+	 *   - Declined → send recruit_declined to the candidate as polite closure
 	 */
 	public static function run_recruitment_automations(object $candidate, string $old_stage, string $new_stage): void {
-		$referrer = $candidate->referrer_id ? get_userdata($candidate->referrer_id) : null;
-		$stage_labels = self::$recruit_stages;
+		$referrer        = $candidate->referrer_id ? get_userdata($candidate->referrer_id) : null;
+		$stage_labels    = self::$recruit_stages;
 		$candidate_first = explode(' ', trim($candidate->name))[0] ?? $candidate->name;
-		$company_line = $candidate->company ? ' (' . $candidate->company . ')' : '';
+		$company_line    = $candidate->company ? ' (' . $candidate->company . ')' : '';
 
-		// ── Stage-specific detail block for referrer emails ──
-		$stage_details = [
-			'contacted' => 'We\'ve reached out to them to start the conversation.',
-			'invited'   => 'An invitation to visit one of our meetings has been sent.',
-			'visited'   => 'They attended a meeting — nice work getting them there! We\'ve sent them a quick survey about their interest in joining. In the meantime, please reach out to them personally to get their feedback on:'
-				. '<ul style="margin:10px 0 0 20px;padding:0;color:#1e40af;font-size:14px;line-height:1.8;">'
-				. '<li><strong>Overall impression</strong> — How did they feel about the group dynamic and format?</li>'
-				. '<li><strong>Connections made</strong> — Did they meet anyone they\'d like to stay in touch with?</li>'
-				. '<li><strong>Suggestions</strong> — Anything we could do better for visitors?</li>'
-				. '<li><strong>Fit</strong> — Do they see themselves contributing to and benefiting from the group?</li>'
-				. '</ul>',
-			'decision'  => 'The group is making a decision on their membership.',
-			'accepted'  => 'They\'ve been accepted! Their member account is being created.',
-			'declined'  => 'After careful consideration, we\'ve decided not to proceed at this time.',
-		];
-		$detail_text = $stage_details[$new_stage] ?? '';
-		$html_stages = ['visited'];
-		$detail_inner = in_array($new_stage, $html_stages, true)
-			? $detail_text
-			: esc_html($detail_text);
-		$detail_block = $detail_text
-			? '<div style="background:#f0f9ff;border-left:3px solid #2563eb;padding:12px 16px;margin:16px 0;font-size:14px;color:#1e40af;">' . $detail_inner . '</div>'
-			: '';
-
-		// Council emails for CC on referrer-facing stage notifications (excludes the referrer themself).
-		$council_cc = self::get_council_cc_emails($referrer);
-
-		// ── 1. "Accepted" → auto-create member account ──
-		$accepted_referrer_emailed = false;
-		if ($new_stage === 'accepted') {
-			$conversion     = self::convert_candidate_to_member($candidate);
-			$created_user_id = $conversion['user_id'];
-
-			// Store errors in a transient so the admin sees them after redirect.
-			if (!empty($conversion['errors'])) {
-				set_transient(
-					'cbnexus_recruit_convert_error_' . $candidate->id,
-					implode(' ', $conversion['errors']),
-					60
-				);
-			}
-
-			if ($referrer && $created_user_id) {
-				CBNexus_Email_Service::send('recruit_accepted', $referrer->user_email, [
-					'referrer_name'   => $referrer->display_name,
-					'candidate_name'  => $candidate->name,
-					'portal_url'      => CBNexus_Portal_Router::get_portal_url(),
-				], [
-					'recipient_id' => $referrer->ID,
-					'related_type' => 'recruitment_accepted',
-					'cc'           => $council_cc,
-				]);
-				$accepted_referrer_emailed = true;
-			}
-
-			if (class_exists('CBNexus_Logger')) {
-				CBNexus_Logger::info('Candidate accepted and converted to member.', [
-					'candidate_id' => $candidate->id,
-					'candidate'    => $candidate->name,
-					'new_user_id'  => $created_user_id,
-				]);
-			}
+		// Always record the stage transition itself (skip on initial referral with no prior stage).
+		if ($old_stage !== $new_stage) {
+			$msg = $old_stage === ''
+				? 'Added to pipeline as ' . ($stage_labels[$new_stage] ?? $new_stage)
+				: 'Stage changed: ' . ($stage_labels[$old_stage] ?? $old_stage) . ' → ' . ($stage_labels[$new_stage] ?? $new_stage);
+			CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'stage_change', $msg, [
+				'from' => $old_stage,
+				'to'   => $new_stage,
+			]);
 		}
 
-		// ── 2. "Invited" → email the candidate ──
+		// ── Invited → invitation to candidate + same-body copy to referrer ──
 		if ($new_stage === 'invited' && !empty($candidate->email)) {
 			$invitation_notes = $candidate->notes ?: '';
 			$notes_block = $invitation_notes
@@ -526,26 +623,50 @@ final class CBNexus_Portal_Admin_Recruitment {
 					. '<strong>📝 A note from your host:</strong> ' . esc_html($invitation_notes) . '</div>'
 				: '';
 
-			CBNexus_Email_Service::send('recruit_invitation', $candidate->email, [
-				'candidate_first_name' => $candidate_first,
-				'candidate_name'       => $candidate->name,
-				'referrer_name'        => $referrer ? $referrer->display_name : 'a member of The Circle',
+			$next_cu = CBNexus_Recruitment_Settings::get_next_circleup_display();
+
+			$invitation_vars = [
+				'candidate_first_name'   => $candidate_first,
+				'candidate_name'         => $candidate->name,
+				'referrer_name'          => $referrer ? $referrer->display_name : 'a member of The Circle',
 				'invitation_notes_block' => $notes_block,
-			], [
+				'next_circleup'          => $next_cu['combined'],
+			];
+
+			$sent_candidate = CBNexus_Email_Service::send('recruit_invitation', $candidate->email, $invitation_vars, [
 				'related_type' => 'recruitment_invitation',
 				'related_id'   => $candidate->id,
 			]);
+			if ($sent_candidate) {
+				CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
+					'Invitation email sent to candidate (' . $candidate->email . ')', ['template' => 'recruit_invitation']);
+			}
+
+			// Send the same invitation body to the referrer as well — replaces the old
+			// stage-change-referrer email so the referrer sees exactly what the candidate sees.
+			if ($referrer) {
+				$sent_referrer = CBNexus_Email_Service::send('recruit_invitation', $referrer->user_email, $invitation_vars, [
+					'recipient_id' => $referrer->ID,
+					'related_type' => 'recruitment_invitation_referrer',
+					'related_id'   => $candidate->id,
+				]);
+				if ($sent_referrer) {
+					CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
+						'Invitation email copy sent to referrer (' . $referrer->user_email . ')', ['template' => 'recruit_invitation']);
+				}
+			}
 		}
 
-		// ── 3. "Visited" → NPS-style feedback survey email (once only) ──
+		// ── Visited → thank-you with Interested / Not Interested buttons (once only) ──
 		if ($new_stage === 'visited') {
 			$opt_key = 'cbnexus_recruit_visited_sent_' . $candidate->id;
 
 			if (empty($candidate->email)) {
+				CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_skipped',
+					'Visit thank-you skipped — candidate has no email on file.');
 				if (class_exists('CBNexus_Logger')) {
 					CBNexus_Logger::warning('Cannot send visit feedback survey — candidate has no email.', [
 						'candidate_id' => $candidate->id,
-						'candidate'    => $candidate->name,
 					]);
 				}
 			} elseif (get_option($opt_key)) {
@@ -559,16 +680,14 @@ final class CBNexus_Portal_Admin_Recruitment {
 
 				$followup = $referrer
 					? $referrer->display_name
-					: 'A member of The Circle Council';
+					: 'The Circle Council';
 
 				$sent = CBNexus_Email_Service::send('recruit_visited_thankyou', $candidate->email, [
 					'candidate_first_name' => $candidate_first,
 					'candidate_name'       => $candidate->name,
 					'followup_name'        => $followup,
-					'fb_yes'               => $feedback_urls['fb_yes'],
-					'fb_maybe'             => $feedback_urls['fb_maybe'],
-					'fb_later'             => $feedback_urls['fb_later'],
-					'fb_no'                => $feedback_urls['fb_no'],
+					'fb_interested'        => $feedback_urls['fb_interested'],
+					'fb_not_interested'    => $feedback_urls['fb_not_interested'],
 				], [
 					'related_type' => 'recruitment_visited',
 					'related_id'   => $candidate->id,
@@ -576,55 +695,141 @@ final class CBNexus_Portal_Admin_Recruitment {
 
 				if ($sent) {
 					update_option($opt_key, gmdate('Y-m-d H:i:s'), false);
-				}
-
-				if (class_exists('CBNexus_Logger')) {
-					CBNexus_Logger::info('Visit feedback survey ' . ($sent ? 'sent' : 'FAILED') . '.', [
-						'candidate_id' => $candidate->id,
-						'email'        => $candidate->email,
-						'sent'         => $sent,
-					]);
+					CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
+						'Post-visit email sent with Interested / Not Interested buttons', ['template' => 'recruit_visited_thankyou']);
 				}
 			}
 		}
 
-		// ── 4. Notify referrer on any stage change ──
-		// Skip if the specific recruit_accepted email was already sent to avoid a double-send.
-		if ($referrer && !$accepted_referrer_emailed) {
-			CBNexus_Email_Service::send('recruit_stage_referrer', $referrer->user_email, [
-				'referrer_name'        => $referrer->display_name,
+		// ── Decision → council review email to all active members (objection window) ──
+		if ($new_stage === 'decision') {
+			self::send_council_review_email($candidate);
+		}
+
+		// ── Accepted → auto-create member + notify referrer + handoff email to onboarding ──
+		$accepted_referrer_emailed = false;
+		if ($new_stage === 'accepted') {
+			$conversion      = self::convert_candidate_to_member($candidate);
+			$created_user_id = $conversion['user_id'];
+
+			if (!empty($conversion['errors'])) {
+				set_transient(
+					'cbnexus_recruit_convert_error_' . $candidate->id,
+					implode(' ', $conversion['errors']),
+					60
+				);
+			}
+
+			if ($referrer && $created_user_id) {
+				$sent = CBNexus_Email_Service::send('recruit_accepted', $referrer->user_email, [
+					'referrer_name'  => $referrer->display_name,
+					'candidate_name' => $candidate->name,
+					'portal_url'     => CBNexus_Portal_Router::get_portal_url(),
+				], [
+					'recipient_id' => $referrer->ID,
+					'related_type' => 'recruitment_accepted',
+				]);
+				$accepted_referrer_emailed = true;
+				if ($sent) {
+					CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
+						'Acceptance notice sent to referrer (' . $referrer->user_email . ')', ['template' => 'recruit_accepted']);
+				}
+			}
+
+			// Onboarding handoff — to the configured onboarding email (Ben).
+			$onboarding_email = CBNexus_Recruitment_Settings::get_onboarding_email();
+			if ($onboarding_email && is_email($onboarding_email)) {
+				$sent_ob = CBNexus_Email_Service::send('recruit_onboarding_handoff', $onboarding_email, [
+					'candidate_name'         => $candidate->name,
+					'candidate_email'        => $candidate->email,
+					'candidate_company_line' => $company_line,
+					'referrer_label'         => $referrer ? $referrer->display_name : '—',
+				], [
+					'related_type' => 'recruitment_onboarding_handoff',
+					'related_id'   => $candidate->id,
+				]);
+				if ($sent_ob) {
+					CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
+						'Onboarding handoff email sent to ' . $onboarding_email, ['template' => 'recruit_onboarding_handoff']);
+				}
+			}
+
+			if (class_exists('CBNexus_Logger')) {
+				CBNexus_Logger::info('Candidate accepted and converted to member.', [
+					'candidate_id' => $candidate->id,
+					'candidate'    => $candidate->name,
+					'new_user_id'  => $created_user_id,
+				]);
+			}
+		}
+
+		// ── Declined → polite closure email to the candidate ──
+		if ($new_stage === 'declined' && !empty($candidate->email)) {
+			$sent = CBNexus_Email_Service::send('recruit_declined', $candidate->email, [
+				'candidate_first_name' => $candidate_first,
 				'candidate_name'       => $candidate->name,
-				'candidate_company_line' => $company_line,
-				'stage_label'          => $stage_labels[$new_stage] ?? $new_stage,
-				'stage_detail_block'   => $detail_block,
 			], [
-				'recipient_id' => $referrer->ID,
-				'related_type' => 'recruitment_stage_change',
+				'related_type' => 'recruitment_declined',
 				'related_id'   => $candidate->id,
-				'cc'           => $council_cc,
 			]);
+			if ($sent) {
+				CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
+					'Decline closure email sent to candidate (' . $candidate->email . ')', ['template' => 'recruit_declined']);
+			}
 		}
 	}
 
 	/**
-	 * Return email addresses for all council members (cb_admin + cb_super_admin),
-	 * optionally excluding a given user (typically the referrer, who is the primary To).
-	 *
-	 * @return string[]
+	 * Send the council-review email to all active members, then record an event
+	 * and stamp the candidate so the review-window timer starts ticking.
 	 */
-	private static function get_council_cc_emails(?WP_User $exclude = null): array {
-		$admins       = get_users(['role' => 'cb_admin',       'fields' => ['ID', 'user_email']]);
-		$super_admins = get_users(['role' => 'cb_super_admin', 'fields' => ['ID', 'user_email']]);
-		$exclude_id   = $exclude ? (int) $exclude->ID : 0;
+	private static function send_council_review_email(object $candidate): void {
+		$members = CBNexus_Member_Repository::get_all_members('active');
+		if (empty($members)) { return; }
 
-		$emails = [];
-		foreach (array_merge($admins, $super_admins) as $u) {
-			if ((int) $u->ID === $exclude_id) { continue; }
-			if (!empty($u->user_email)) {
-				$emails[strtolower($u->user_email)] = $u->user_email;
-			}
+		// Resolve the candidate's category name (if any) for inclusion in the email.
+		$category_label = '—';
+		if (!empty($candidate->category_id)) {
+			global $wpdb;
+			$found = $wpdb->get_var($wpdb->prepare(
+				"SELECT title FROM {$wpdb->prefix}cb_recruitment_categories WHERE id = %d",
+				(int) $candidate->category_id
+			));
+			if ($found) { $category_label = $found; }
 		}
-		return array_values($emails);
+		if ($category_label === '—' && !empty($candidate->industry)) {
+			$category_label = $candidate->industry;
+		}
+
+		$company_line = $candidate->company ? ' (' . $candidate->company . ')' : '';
+		$review_hours = CBNexus_Recruitment_Settings::get_council_review_hours();
+
+		$sent_count = 0;
+		foreach ($members as $m) {
+			$email = $m['user_email'] ?? '';
+			if (empty($email) || !is_email($email)) { continue; }
+
+			$ok = CBNexus_Email_Service::send('recruit_council_review', $email, [
+				'candidate_name'         => $candidate->name,
+				'candidate_company_line' => $company_line,
+				'candidate_category'     => $category_label,
+				'review_hours'           => $review_hours,
+			], [
+				'recipient_id' => $m['user_id'],
+				'related_type' => 'recruitment_council_review',
+				'related_id'   => $candidate->id,
+			]);
+			if ($ok) { $sent_count++; }
+		}
+
+		// Stamp the candidate so the UI can compute when the window closes.
+		update_option('cbnexus_council_review_sent_' . $candidate->id, gmdate('Y-m-d H:i:s'), false);
+
+		CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'council_review_sent',
+			'Council review email sent to ' . $sent_count . ' active members — ' . $review_hours . '-hour objection window opened.', [
+				'recipients'   => $sent_count,
+				'review_hours' => $review_hours,
+			]);
 	}
 
 	/**
@@ -721,9 +926,10 @@ final class CBNexus_Portal_Admin_Recruitment {
 
 	/**
 	 * Generate tokenized one-click feedback URLs for the visit survey.
+	 * Post-revamp: only two answers — interested / not_interested.
 	 */
 	private static function generate_visit_feedback_urls(int $candidate_id): array {
-		$answers = ['yes', 'maybe', 'later', 'no'];
+		$answers = ['interested', 'not_interested'];
 		$urls = [];
 		foreach ($answers as $answer) {
 			$token = CBNexus_Token_Service::generate(0, 'visit_feedback', [
@@ -869,18 +1075,23 @@ final class CBNexus_Portal_Admin_Recruitment {
 			</div>
 			<p class="cbnexus-admin-meta" style="margin-bottom:12px;">Define what types of members the group is looking for. Coverage is computed automatically based on member assignments.</p>
 
-			<?php if ($summary['total'] > 0) : ?>
-			<!-- Coverage Summary Bar -->
+			<?php
+			$cap_filled = (int) ($summary['capacity_filled'] ?? 0);
+			$cap_total  = (int) ($summary['capacity_total']  ?? 25);
+			$cap_open   = max(0, $cap_total - $cap_filled);
+			?>
+			<!-- Capacity Bar (N of 25 — decoupled from category count) -->
 			<div style="display:flex;gap:16px;align-items:center;padding:12px 16px;background:#f8f5fa;border-radius:10px;margin-bottom:16px;flex-wrap:wrap;">
-				<span style="font-weight:700;color:var(--cbnexus-plum,#4a154b);font-size:15px;"><?php echo esc_html($summary['coverage_pct']); ?>% Covered</span>
-				<span style="font-size:13px;color:#059669;">✅ <?php echo esc_html($summary['covered']); ?> Filled</span>
-				<?php if ($summary['partial'] > 0) : ?>
-					<span style="font-size:13px;color:#d97706;">🟡 <?php echo esc_html($summary['partial']); ?> Partial</span>
+				<span style="font-weight:700;color:var(--cbnexus-plum,#4a154b);font-size:15px;"><?php echo esc_html($cap_filled); ?> of <?php echo esc_html($cap_total); ?> seats filled</span>
+				<span style="font-size:13px;color:#6b7280;"><?php echo esc_html($cap_open); ?> open</span>
+				<?php if ($summary['total'] > 0) : ?>
+					<span style="font-size:13px;color:#059669;margin-left:auto;">✅ <?php echo esc_html($summary['covered']); ?> categories filled</span>
+					<?php if ($summary['partial'] > 0) : ?>
+						<span style="font-size:13px;color:#d97706;">🟡 <?php echo esc_html($summary['partial']); ?> partial</span>
+					<?php endif; ?>
+					<span style="font-size:13px;color:#dc2626;">🔍 <?php echo esc_html($summary['gaps']); ?> open</span>
 				<?php endif; ?>
-				<span style="font-size:13px;color:#dc2626;">🔍 <?php echo esc_html($summary['gaps']); ?> Open</span>
-				<span style="font-size:13px;color:#6b7280;">of <?php echo esc_html($summary['total']); ?> total</span>
 			</div>
-			<?php endif; ?>
 
 			<!-- Categories Table -->
 			<div class="cbnexus-admin-table-wrap">

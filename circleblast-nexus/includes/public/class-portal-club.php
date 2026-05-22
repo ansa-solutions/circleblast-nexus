@@ -197,8 +197,8 @@ final class CBNexus_Portal_Club {
 			</div>
 			<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;background:var(--cb-bg-deep,#f8f6fa);border-radius:8px;">
 				<div style="flex:1;min-width:120px;">
-					<div style="font-size:28px;font-weight:800;color:var(--cb-text);"><?php echo esc_html($summary['coverage_pct']); ?>%</div>
-					<div style="font-size:12px;color:var(--cb-text-sec);"><?php esc_html_e('Coverage', 'circleblast-nexus'); ?></div>
+					<div style="font-size:28px;font-weight:800;color:var(--cb-text);"><?php echo esc_html((int) ($summary['capacity_filled'] ?? 0)); ?> <span style="font-size:18px;color:var(--cb-text-sec);font-weight:600;">of <?php echo esc_html((int) ($summary['capacity_total'] ?? 25)); ?></span></div>
+					<div style="font-size:12px;color:var(--cb-text-sec);"><?php esc_html_e('Seats Filled', 'circleblast-nexus'); ?></div>
 				</div>
 				<div style="display:flex;gap:14px;">
 					<div style="text-align:center;"><div style="font-size:20px;font-weight:700;color:#059669;"><?php echo esc_html($summary['covered']); ?></div><div style="font-size:11px;color:var(--cb-text-ter);">Filled</div></div>
@@ -441,7 +441,7 @@ final class CBNexus_Portal_Club {
 				<!-- Section 3: Recruitment Coverage -->
 				<div class="cbnexus-present-section" data-section="3">
 					<h2 class="cbnexus-present-sh">🎯 Who We Need</h2>
-					<p style="font-size:18px;color:rgba(255,255,255,.55);margin:-12px 0 20px;"><?php echo esc_html($cov_summary['coverage_pct']); ?>% coverage · <?php echo esc_html($cov_summary['gaps']); ?> open roles</p>
+					<p style="font-size:18px;color:rgba(255,255,255,.55);margin:-12px 0 20px;"><?php echo esc_html((int) ($cov_summary['capacity_filled'] ?? 0)); ?> of <?php echo esc_html((int) ($cov_summary['capacity_total'] ?? 25)); ?> seats · <?php echo esc_html($cov_summary['gaps']); ?> open roles</p>
 					<div style="display:flex;flex-wrap:wrap;gap:12px;">
 						<?php foreach ($cov_gaps as $gap) :
 							$dot_color = $p_colors[$gap->priority] ?? '#f59e0b';

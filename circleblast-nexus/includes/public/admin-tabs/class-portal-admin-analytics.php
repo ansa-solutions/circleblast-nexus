@@ -181,8 +181,8 @@ final class CBNexus_Portal_Admin_Analytics {
 			<!-- Summary stats row -->
 			<div class="cbnexus-admin-stats-row" style="margin-bottom:16px;">
 				<div class="cbnexus-admin-stat">
-					<div class="cbnexus-admin-stat-value"><?php echo esc_html($summary['coverage_pct']); ?>%</div>
-					<div class="cbnexus-admin-stat-label">Coverage</div>
+					<div class="cbnexus-admin-stat-value"><?php echo esc_html((int) ($summary['capacity_filled'] ?? 0)); ?>/<?php echo esc_html((int) ($summary['capacity_total'] ?? 25)); ?></div>
+					<div class="cbnexus-admin-stat-label">Seats Filled</div>
 				</div>
 				<div class="cbnexus-admin-stat">
 					<div class="cbnexus-admin-stat-value" style="color:#059669;"><?php echo esc_html($summary['covered']); ?></div>

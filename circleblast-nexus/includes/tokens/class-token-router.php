@@ -509,20 +509,41 @@ final class CBNexus_Token_Router {
 			exit;
 		}
 
+		// Two-answer flow. Older "yes/maybe/later/no" tokens still work — they\'re
+		// normalized so a "yes" or "maybe" counts as Interested and "no" / "later"
+		// counts as Not Interested.
+		$normalize = [
+			'interested'     => 'interested',
+			'not_interested' => 'not_interested',
+			'yes'            => 'interested',
+			'maybe'          => 'interested',
+			'later'          => 'not_interested',
+			'no'             => 'not_interested',
+		];
+		$answer = $normalize[$answer] ?? $answer;
+
 		$labels = [
-			'yes'   => 'Yes, I\'m in!',
-			'maybe' => 'Tell me more',
-			'later' => 'Not right now',
-			'no'    => 'Not for me',
+			'interested'     => 'Interested',
+			'not_interested' => 'Not Interested',
 		];
 		$label = $labels[$answer] ?? $answer;
 
-		// Store the response.
+		// Store the response (read by the recruitment dashboard).
 		update_option('cbnexus_visit_feedback_' . $candidate_id, [
 			'answer'      => $answer,
 			'label'       => $label,
 			'answered_at' => gmdate('Y-m-d H:i:s'),
 		], false);
+
+		// Log to the candidate timeline so Bob sees it in the UI.
+		if (class_exists('CBNexus_Candidate_Event_Repository')) {
+			CBNexus_Candidate_Event_Repository::log(
+				(int) $candidate_id,
+				'feedback_received',
+				'Candidate responded: ' . $label,
+				['answer' => $answer]
+			);
+		}
 
 		if (class_exists('CBNexus_Logger')) {
 			CBNexus_Logger::info('Visit feedback received.', [
@@ -531,87 +552,15 @@ final class CBNexus_Token_Router {
 			]);
 		}
 
-		// ── Notify the referrer with the response + suggested actions ──
-		self::notify_referrer_of_feedback($candidate_id, $answer, $label);
-
-		// Friendly confirmation.
 		$messages = [
-			'yes'   => '<p>🎉 That\'s great to hear! Someone from The Circle will be in touch soon about next steps.</p>',
-			'maybe' => '<p>Thanks! We\'ll have someone reach out with more details about what membership looks like.</p>',
-			'later' => '<p>No problem at all — the door is always open. Thanks for letting us know!</p>',
-			'no'    => '<p>We appreciate your honesty. Thanks for taking the time to visit us!</p>',
+			'interested'     => '<p>🎉 Great to hear! Someone from The Circle will be in touch soon about next steps.</p>',
+			'not_interested' => '<p>We appreciate your honesty. Thanks for taking the time to visit us!</p>',
 		];
 		$body = ($messages[$answer] ?? '<p>Thanks for your feedback!</p>')
 			. '<p style="margin-top:16px;"><a href="' . esc_url(home_url()) . '" style="color:#5b2d6e;">Visit The Circle →</a></p>';
 
 		self::render_page('Thanks for Your Feedback!', $body);
 		exit;
-	}
-
-	/**
-	 * Notify the referring member that their candidate responded to the visit survey.
-	 * Includes tailored action steps based on the response.
-	 */
-	private static function notify_referrer_of_feedback(int $candidate_id, string $answer, string $label): void {
-		global $wpdb;
-		$table = $wpdb->prefix . 'cb_candidates';
-		$candidate = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $candidate_id));
-		if (!$candidate || !$candidate->referrer_id) { return; }
-
-		$referrer = get_userdata($candidate->referrer_id);
-		if (!$referrer) { return; }
-
-		// Build action block based on response.
-		$action_blocks = [
-			'yes' => '<div style="background:#f0fdf4;border-left:3px solid #16a34a;padding:14px 18px;margin:16px 0;font-size:14px;color:#166534;">'
-				. '<strong>🎉 Great news!</strong> They\'re ready to join. Here\'s what to do next:'
-				. '<ul style="margin:8px 0 0 16px;padding:0;line-height:1.8;">'
-				. '<li>Reach out to congratulate them and answer any remaining questions</li>'
-				. '<li>Let them know the Council will be in touch about next steps and membership details</li>'
-				. '<li>If you haven\'t already, gather their feedback on overall impression and connections made</li>'
-				. '</ul></div>',
-
-			'maybe' => '<div style="background:#eff6ff;border-left:3px solid #2563eb;padding:14px 18px;margin:16px 0;font-size:14px;color:#1e40af;">'
-				. '<strong>🤔 They\'re interested but want more info.</strong> Here\'s how to help:'
-				. '<ul style="margin:8px 0 0 16px;padding:0;line-height:1.8;">'
-				. '<li>Schedule a casual follow-up conversation — coffee, call, or text</li>'
-				. '<li>Share what you personally get out of The Circle and why you referred them</li>'
-				. '<li>Answer questions about commitment, cost, meeting format, and member expectations</li>'
-				. '<li>Ask about their overall impression and whether they connected with anyone specifically</li>'
-				. '</ul></div>',
-
-			'later' => '<div style="background:#fefce8;border-left:3px solid #ca8a04;padding:14px 18px;margin:16px 0;font-size:14px;color:#854d0e;">'
-				. '<strong>⏳ Not right now — but the door is open.</strong> Suggested approach:'
-				. '<ul style="margin:8px 0 0 16px;padding:0;line-height:1.8;">'
-				. '<li>Reach out casually — acknowledge the timing may not be right and there\'s no pressure</li>'
-				. '<li>Ask what would need to change for them to reconsider (timing, format, cost, etc.)</li>'
-				. '<li>Offer to invite them to a future meeting when they\'re ready</li>'
-				. '<li>Keep the relationship warm — they may be a great fit down the road</li>'
-				. '</ul></div>',
-
-			'no' => '<div style="background:#fef2f2;border-left:3px solid #dc2626;padding:14px 18px;margin:16px 0;font-size:14px;color:#991b1b;">'
-				. '<strong>Thank them for their time.</strong> Here\'s what we suggest:'
-				. '<ul style="margin:8px 0 0 16px;padding:0;line-height:1.8;">'
-				. '<li>A quick message thanking them for visiting — keep the relationship positive</li>'
-				. '<li>If comfortable, ask what didn\'t resonate — their feedback helps us improve</li>'
-				. '<li>No hard feelings — not every group is the right fit for everyone</li>'
-				. '</ul></div>',
-		];
-
-		$action_block = $action_blocks[$answer] ?? '';
-
-		if (class_exists('CBNexus_Email_Service')) {
-			CBNexus_Email_Service::send('recruit_feedback_referrer', $referrer->user_email, [
-				'referrer_name'  => $referrer->display_name,
-				'candidate_name' => $candidate->name,
-				'feedback_label' => $label,
-				'action_block'   => $action_block,
-			], [
-				'recipient_id' => $referrer->ID,
-				'related_type' => 'recruitment_feedback',
-				'related_id'   => $candidate->id,
-			]);
-		}
 	}
 
 	// ─── Manage Preferences ─────────────────────────────────────────────

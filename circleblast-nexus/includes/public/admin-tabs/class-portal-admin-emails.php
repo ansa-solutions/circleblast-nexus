@@ -35,6 +35,9 @@ final class CBNexus_Portal_Admin_Emails {
 		'recruit_accepted'              => ['name' => 'Candidate Accepted',             'group' => 'Recruitment'],
 		'recruit_visited_thankyou'      => ['name' => 'Visit Thank You',                'group' => 'Recruitment'],
 		'recruit_feedback_referrer'     => ['name' => 'Feedback Received (Referrer)',    'group' => 'Recruitment'],
+		'recruit_council_review'        => ['name' => 'Council Review Window',          'group' => 'Recruitment'],
+		'recruit_onboarding_handoff'    => ['name' => 'Onboarding Handoff',             'group' => 'Recruitment'],
+		'recruit_declined'              => ['name' => 'Decline Closure (Candidate)',    'group' => 'Recruitment'],
 	];
 
 	public static function render(): void {
