@@ -12,7 +12,7 @@ defined('ABSPATH') || exit;
 final class CBNexus_Recruitment_Settings {
 
 	const OPT_CAPACITY_TOTAL         = 'cbnexus_capacity_total';
-	const OPT_ONBOARDING_EMAIL       = 'cbnexus_onboarding_email';
+	const OPT_ONBOARDING_USER_IDS    = 'cbnexus_onboarding_user_ids';
 	const OPT_COUNCIL_REVIEW_HOURS   = 'cbnexus_council_review_hours';
 	const OPT_CIRCLEUP_DEFAULT_TIME  = 'cbnexus_circleup_default_time';
 
@@ -25,23 +25,80 @@ final class CBNexus_Recruitment_Settings {
 	}
 
 	/**
-	 * Email address that gets notified at the Accepted stage to onboard the new member.
-	 * Falls back to the first cb_admin user's email if not configured.
+	 * Members who get the onboarding-handoff email when a candidate is Accepted.
+	 *
+	 * Returns an array of {user_id, user_email, display_name} entries. If no
+	 * members are configured, falls back to the first cb_admin so the handoff
+	 * email never silently drops on the floor.
+	 *
+	 * @return array<int, array{user_id:int, user_email:string, display_name:string}>
 	 */
-	public static function get_onboarding_email(): string {
-		$saved = trim((string) get_option(self::OPT_ONBOARDING_EMAIL, ''));
-		if ($saved !== '' && is_email($saved)) {
-			return $saved;
-		}
-
-		$admins = get_users(['role' => 'cb_admin', 'fields' => ['user_email']]);
-		foreach ($admins as $u) {
-			if (!empty($u->user_email) && is_email($u->user_email)) {
-				return $u->user_email;
+	public static function get_onboarding_recipients(): array {
+		$ids = self::get_onboarding_user_ids();
+		$out = [];
+		foreach ($ids as $uid) {
+			$u = get_userdata($uid);
+			if ($u && !empty($u->user_email) && is_email($u->user_email)) {
+				$out[] = [
+					'user_id'      => (int) $u->ID,
+					'user_email'   => $u->user_email,
+					'display_name' => $u->display_name,
+				];
 			}
 		}
 
-		return (string) get_option('admin_email', '');
+		if (!empty($out)) { return $out; }
+
+		// Fallback — first cb_admin user, so the email never gets dropped.
+		$admins = get_users(['role' => 'cb_admin', 'fields' => ['ID', 'user_email', 'display_name']]);
+		foreach ($admins as $a) {
+			if (!empty($a->user_email) && is_email($a->user_email)) {
+				return [[
+					'user_id'      => (int) $a->ID,
+					'user_email'   => $a->user_email,
+					'display_name' => $a->display_name,
+				]];
+			}
+		}
+		return [];
+	}
+
+	/**
+	 * Saved onboarding user IDs (raw).
+	 *
+	 * @return int[]
+	 */
+	public static function get_onboarding_user_ids(): array {
+		$raw = get_option(self::OPT_ONBOARDING_USER_IDS, []);
+		if (is_string($raw)) {
+			$decoded = json_decode($raw, true);
+			$raw = is_array($decoded) ? $decoded : [];
+		}
+		if (!is_array($raw)) { return []; }
+
+		$ids = [];
+		foreach ($raw as $v) {
+			$id = (int) $v;
+			if ($id > 0) { $ids[$id] = true; }
+		}
+		return array_keys($ids);
+	}
+
+	/**
+	 * Save onboarding user IDs (filters to existing CB-role users).
+	 */
+	public static function save_onboarding_user_ids(array $user_ids): void {
+		$clean = [];
+		foreach ($user_ids as $v) {
+			$id = (int) $v;
+			if ($id <= 0) { continue; }
+			$u = get_userdata($id);
+			if (!$u) { continue; }
+			$has_cb_role = array_intersect(['cb_member', 'cb_admin', 'cb_super_admin'], (array) $u->roles);
+			if (empty($has_cb_role)) { continue; }
+			$clean[$id] = $id;
+		}
+		update_option(self::OPT_ONBOARDING_USER_IDS, array_values($clean), false);
 	}
 
 	/**

@@ -104,6 +104,9 @@ final class CBNexus_Portal_Admin {
 		if (isset($_GET['cbnexus_portal_rotate_focus'])) {
 			CBNexus_Portal_Admin_Recruitment::handle_rotate_focus();
 		}
+		if (isset($_POST['cbnexus_portal_save_onboarding_recipients'])) {
+			CBNexus_Portal_Admin_Recruitment::handle_save_onboarding_recipients();
+		}
 
 		// ── Matching ─────────────────────────────────────────────────────
 		if (isset($_POST['cbnexus_portal_save_rules'])) {
@@ -384,6 +387,7 @@ final class CBNexus_Portal_Admin {
 			'needs_schedule_saved'    => 'Recruitment needs schedule saved.',
 			'focus_saved'             => 'Monthly focus settings saved.',
 			'focus_rotated'           => 'Recruitment focus categories rotated.',
+			'onboarding_saved'        => 'Onboarding recipients saved.',
 			'help_saved'              => 'Help content saved.',
 			'help_reset'              => 'Help content reset to default.',
 			'tooltips_saved'          => 'Stat tooltips saved.',

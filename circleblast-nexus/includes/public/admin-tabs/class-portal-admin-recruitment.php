@@ -736,22 +736,27 @@ final class CBNexus_Portal_Admin_Recruitment {
 				}
 			}
 
-			// Onboarding handoff — to the configured onboarding email (Ben).
-			$onboarding_email = CBNexus_Recruitment_Settings::get_onboarding_email();
-			if ($onboarding_email && is_email($onboarding_email)) {
-				$sent_ob = CBNexus_Email_Service::send('recruit_onboarding_handoff', $onboarding_email, [
-					'candidate_name'         => $candidate->name,
-					'candidate_email'        => $candidate->email,
-					'candidate_company_line' => $company_line,
-					'referrer_label'         => $referrer ? $referrer->display_name : '—',
-				], [
+			// Onboarding handoff — to each configured onboarding recipient.
+			$ob_recipients = CBNexus_Recruitment_Settings::get_onboarding_recipients();
+			$ob_vars = [
+				'candidate_name'         => $candidate->name,
+				'candidate_email'        => $candidate->email,
+				'candidate_company_line' => $company_line,
+				'referrer_label'         => $referrer ? $referrer->display_name : '—',
+			];
+			$ob_emailed = [];
+			foreach ($ob_recipients as $r) {
+				$ok = CBNexus_Email_Service::send('recruit_onboarding_handoff', $r['user_email'], $ob_vars, [
+					'recipient_id' => $r['user_id'],
 					'related_type' => 'recruitment_onboarding_handoff',
 					'related_id'   => $candidate->id,
 				]);
-				if ($sent_ob) {
-					CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
-						'Onboarding handoff email sent to ' . $onboarding_email, ['template' => 'recruit_onboarding_handoff']);
-				}
+				if ($ok) { $ob_emailed[] = $r['display_name'] . ' (' . $r['user_email'] . ')'; }
+			}
+			if (!empty($ob_emailed)) {
+				CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'email_sent',
+					'Onboarding handoff email sent to: ' . implode(', ', $ob_emailed),
+					['template' => 'recruit_onboarding_handoff', 'recipients' => count($ob_emailed)]);
 			}
 
 			if (class_exists('CBNexus_Logger')) {
@@ -1221,7 +1226,79 @@ final class CBNexus_Portal_Admin_Recruitment {
 		</div>
 
 		<?php self::render_focus_settings(); ?>
+		<?php self::render_onboarding_recipients(); ?>
 		<?php
+	}
+
+	// ─── Onboarding Recipients Settings ──────────────────────────────
+
+	/**
+	 * Render the multi-select for "who gets the handoff email when a
+	 * candidate is accepted." Defaults to the first cb_admin if nothing
+	 * is configured (see CBNexus_Recruitment_Settings::get_onboarding_recipients()).
+	 */
+	private static function render_onboarding_recipients(): void {
+		$selected_ids = CBNexus_Recruitment_Settings::get_onboarding_user_ids();
+		$selected_set = array_flip($selected_ids);
+		$members      = CBNexus_Member_Repository::get_all_members('active');
+		?>
+		<div class="cbnexus-card" style="margin-top:12px;">
+			<h3>📬 Onboarding Recipients</h3>
+			<p class="cbnexus-admin-meta" style="margin:0 0 14px;">
+				When a candidate moves to <strong>Accepted</strong>, everyone selected below gets the onboarding handoff email
+				(contact info, suggested next steps). Hold Ctrl/Cmd to select multiple.
+				If you leave it blank, the first admin user gets the email so it doesn\'t get dropped.
+			</p>
+
+			<form method="post" style="max-width:520px;">
+				<?php wp_nonce_field('cbnexus_portal_save_onboarding_recipients', '_panonce_ob'); ?>
+				<label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">Members</label>
+				<select name="onboarding_user_ids[]" multiple size="<?php echo esc_attr(min(10, max(4, count($members)))); ?>" class="cbnexus-input" style="width:100%;">
+					<?php foreach ($members as $m) :
+						$uid = (int) $m['user_id'];
+					?>
+						<option value="<?php echo esc_attr($uid); ?>" <?php echo isset($selected_set[$uid]) ? 'selected' : ''; ?>>
+							<?php echo esc_html($m['display_name']); ?> &lt;<?php echo esc_html($m['user_email']); ?>&gt;
+						</option>
+					<?php endforeach; ?>
+				</select>
+				<div style="margin-top:12px;">
+					<button type="submit" name="cbnexus_portal_save_onboarding_recipients" value="1" class="cbnexus-btn cbnexus-btn-primary">Save Recipients</button>
+				</div>
+			</form>
+
+			<?php $current = CBNexus_Recruitment_Settings::get_onboarding_recipients(); ?>
+			<div class="cbnexus-admin-meta" style="margin-top:14px;font-size:12px;">
+				<strong>Currently emailing:</strong>
+				<?php if (empty($current)) : ?>
+					<em>nobody (fallback active — no admins found)</em>
+				<?php else : ?>
+					<?php
+					$labels = array_map(function ($r) {
+						return $r['display_name'] . ' (' . $r['user_email'] . ')';
+					}, $current);
+					echo esc_html(implode(', ', $labels));
+					if (empty($selected_ids)) {
+						echo ' <em>(fallback — no explicit recipients configured)</em>';
+					}
+					?>
+				<?php endif; ?>
+			</div>
+		</div>
+		<?php
+	}
+
+	public static function handle_save_onboarding_recipients(): void {
+		if (!wp_verify_nonce(wp_unslash($_POST['_panonce_ob'] ?? ''), 'cbnexus_portal_save_onboarding_recipients')) { return; }
+		if (!current_user_can('cbnexus_manage_members')) { return; }
+
+		$ids = $_POST['onboarding_user_ids'] ?? [];
+		if (!is_array($ids)) { $ids = []; }
+
+		CBNexus_Recruitment_Settings::save_onboarding_user_ids($ids);
+
+		wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', ['pa_notice' => 'onboarding_saved']));
+		exit;
 	}
 
 	// ─── Monthly Focus Settings ──────────────────────────────────────
