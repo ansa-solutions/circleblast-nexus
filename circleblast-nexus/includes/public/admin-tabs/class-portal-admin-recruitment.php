@@ -267,8 +267,11 @@ final class CBNexus_Portal_Admin_Recruitment {
 								</form>
 								<?php echo self::render_action_chip(self::get_action_state($c)); ?>
 							</td>
-							<td class="cbnexus-admin-meta">
-								<?php echo esc_html($c->notes ?: '—'); ?>
+							<td class="cbnexus-admin-meta" style="max-width:260px;">
+								<?php $note_text = $c->notes ?: '—'; ?>
+								<div title="<?php echo esc_attr($c->notes ?: ''); ?>" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">
+									<?php echo esc_html($note_text); ?>
+								</div>
 								<?php
 								$fb = get_option('cbnexus_visit_feedback_' . $c->id);
 								if ($fb && is_array($fb) && !empty($fb['label'])) :

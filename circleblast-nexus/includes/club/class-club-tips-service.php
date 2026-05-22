@@ -30,30 +30,10 @@ final class CBNexus_Club_Tips_Service {
 		$month     = self::get_this_month_activity();
 		$trends    = self::get_trends();
 
-		// Rule 1: Recruitment gaps — always relevant if gaps exist.
-		if (class_exists('CBNexus_Recruitment_Coverage_Service')) {
-			$summary = CBNexus_Recruitment_Coverage_Service::get_summary();
-			if ($summary['gaps'] > 0) {
-				$focus = CBNexus_Recruitment_Coverage_Service::get_focus_categories(3);
-				$names = array_map(fn($c) => $c->title, $focus);
-				$tips[] = (object) [
-					'icon'      => '🎯',
-					'text'      => sprintf(
-						_n(
-							'We have %d open role this month — %s. Know someone who\'d be a great fit?',
-							'We have %d open roles this month — %s. Know someone who\'d be a great fit?',
-							$summary['gaps'],
-							'circleblast-nexus'
-						),
-						$summary['gaps'],
-						implode(', ', array_slice($names, 0, 3))
-					),
-					'cta_label' => __('View open roles', 'circleblast-nexus'),
-					'cta_url'   => add_query_arg(['section' => 'club', 'coverage' => 'expanded'], $portal_url) . '#coverage-scorecard',
-					'priority'  => 1,
-				];
-			}
-		}
+		// (Removed) Recruitment-gap tip — the old "%d open roles" message counted
+		// uncovered categories, which is misleading now that capacity is tracked
+		// by seat count instead. Removed per user request; the Recruitment tab
+		// shows seat-fill and category coverage directly.
 
 		// Rule 2: Notes completion rate below threshold.
 		$notes_rate = $month['notes_rate'] ?? 0;
