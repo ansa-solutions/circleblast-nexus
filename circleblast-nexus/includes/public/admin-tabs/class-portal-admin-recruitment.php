@@ -1243,13 +1243,14 @@ final class CBNexus_Portal_Admin_Recruitment {
 	private static function render_onboarding_recipients(): void {
 		$selected_ids = CBNexus_Recruitment_Settings::get_onboarding_user_ids();
 		$selected_set = array_flip($selected_ids);
-		$members      = CBNexus_Member_Repository::get_all_members('active');
+		$members      = CBNexus_Recruitment_Settings::get_eligible_onboarding_members();
 		?>
 		<div class="cbnexus-card" style="margin-top:12px;">
 			<h3>📬 Onboarding Recipients</h3>
 			<p class="cbnexus-admin-meta" style="margin:0 0 14px;">
-				When a candidate moves to <strong>Accepted</strong>, everyone selected below gets the onboarding handoff email
-				(contact info, suggested next steps). Hold Ctrl/Cmd to select multiple.
+				When a candidate moves to <strong>Accepted</strong>, every council member selected below gets the onboarding handoff email
+				(contact info, suggested next steps). Only admins and super admins are eligible.
+				Hold Ctrl/Cmd to select multiple.
 				If you leave it blank, the first admin user gets the email so it doesn\'t get dropped.
 			</p>
 

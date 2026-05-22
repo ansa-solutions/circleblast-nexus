@@ -38,13 +38,15 @@ final class CBNexus_Recruitment_Settings {
 		$out = [];
 		foreach ($ids as $uid) {
 			$u = get_userdata($uid);
-			if ($u && !empty($u->user_email) && is_email($u->user_email)) {
-				$out[] = [
-					'user_id'      => (int) $u->ID,
-					'user_email'   => $u->user_email,
-					'display_name' => $u->display_name,
-				];
-			}
+			if (!$u || empty($u->user_email) || !is_email($u->user_email)) { continue; }
+			// Council-only: drop anyone whose roles changed since they were saved.
+			$is_council = array_intersect(['cb_admin', 'cb_super_admin'], (array) $u->roles);
+			if (empty($is_council)) { continue; }
+			$out[] = [
+				'user_id'      => (int) $u->ID,
+				'user_email'   => $u->user_email,
+				'display_name' => $u->display_name,
+			];
 		}
 
 		if (!empty($out)) { return $out; }
@@ -85,7 +87,10 @@ final class CBNexus_Recruitment_Settings {
 	}
 
 	/**
-	 * Save onboarding user IDs (filters to existing CB-role users).
+	 * Save onboarding user IDs.
+	 *
+	 * Onboarding recipients must be council members (cb_admin or
+	 * cb_super_admin). Submissions referencing other roles are dropped.
 	 */
 	public static function save_onboarding_user_ids(array $user_ids): void {
 		$clean = [];
@@ -94,11 +99,31 @@ final class CBNexus_Recruitment_Settings {
 			if ($id <= 0) { continue; }
 			$u = get_userdata($id);
 			if (!$u) { continue; }
-			$has_cb_role = array_intersect(['cb_member', 'cb_admin', 'cb_super_admin'], (array) $u->roles);
-			if (empty($has_cb_role)) { continue; }
+			$is_council = array_intersect(['cb_admin', 'cb_super_admin'], (array) $u->roles);
+			if (empty($is_council)) { continue; }
 			$clean[$id] = $id;
 		}
 		update_option(self::OPT_ONBOARDING_USER_IDS, array_values($clean), false);
+	}
+
+	/**
+	 * Active council members eligible to be onboarding recipients.
+	 *
+	 * @return array<int, array> Member profiles from CBNexus_Member_Repository.
+	 */
+	public static function get_eligible_onboarding_members(): array {
+		$admins = CBNexus_Member_Repository::get_all('cb_admin', 'active');
+		$supers = CBNexus_Member_Repository::get_all('cb_super_admin', 'active');
+		$merged = array_merge($admins, $supers);
+
+		// De-dup by user_id (a user can hold both roles).
+		$by_id = [];
+		foreach ($merged as $m) {
+			$by_id[(int) $m['user_id']] = $m;
+		}
+		$out = array_values($by_id);
+		usort($out, fn($a, $b) => strcasecmp($a['display_name'], $b['display_name']));
+		return $out;
 	}
 
 	/**
