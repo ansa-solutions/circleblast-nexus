@@ -222,12 +222,12 @@ final class CBNexus_Portal_Admin_Recruitment {
 			<div class="cbnexus-admin-table-wrap">
 				<table class="cbnexus-admin-table">
 					<thead><tr>
-						<th style="width:60px;">Actions</th>
+						<th style="width:130px;">Actions</th>
+						<th style="width:130px;">Stage</th>
 						<th>Candidate</th>
 						<th>Company</th>
 						<th>Category</th>
 						<th>Referred By</th>
-						<th>Stage</th>
 						<th>Notes</th>
 						<th>Updated</th>
 					</tr></thead>
@@ -237,7 +237,23 @@ final class CBNexus_Portal_Admin_Recruitment {
 					<?php else : foreach ($candidates as $c) : ?>
 						<tr>
 							<td class="cbnexus-admin-actions-cell">
-								<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $c->id])); ?>" class="cbnexus-link">Edit</a>
+								<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $c->id])); ?>" class="cbnexus-btn cbnexus-btn-outline cbnexus-btn-sm" aria-label="Edit candidate" title="Edit candidate" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;">
+									<span aria-hidden="true">✏️</span> Edit
+								</a>
+							</td>
+							<td>
+								<form method="post" action="" class="cbnexus-admin-stage-form">
+									<?php wp_nonce_field('cbnexus_portal_update_candidate'); ?>
+									<input type="hidden" name="candidate_id" value="<?php echo esc_attr($c->id); ?>" />
+									<input type="hidden" name="notes" value="<?php echo esc_attr($c->notes); ?>" />
+									<input type="hidden" name="cbnexus_portal_update_candidate" value="1" />
+									<select name="stage" onchange="this.form.submit();" style="width:100%;">
+										<?php foreach (self::$recruit_stages as $key => $label) : ?>
+											<option value="<?php echo esc_attr($key); ?>" <?php selected($c->stage, $key); ?>><?php echo esc_html($label); ?></option>
+										<?php endforeach; ?>
+									</select>
+								</form>
+								<?php echo self::render_action_chip(self::get_action_state($c)); ?>
 							</td>
 							<td>
 								<strong><?php echo esc_html($c->name); ?></strong>
@@ -256,20 +272,6 @@ final class CBNexus_Portal_Admin_Recruitment {
 								echo esc_html($cat_name_c);
 							?></td>
 							<td><?php echo esc_html($c->referrer_name ?: '—'); ?></td>
-							<td>
-								<form method="post" action="" class="cbnexus-admin-stage-form">
-									<?php wp_nonce_field('cbnexus_portal_update_candidate'); ?>
-									<input type="hidden" name="candidate_id" value="<?php echo esc_attr($c->id); ?>" />
-									<input type="hidden" name="notes" value="<?php echo esc_attr($c->notes); ?>" />
-									<input type="hidden" name="cbnexus_portal_update_candidate" value="1" />
-									<select name="stage" onchange="this.form.submit();">
-										<?php foreach (self::$recruit_stages as $key => $label) : ?>
-											<option value="<?php echo esc_attr($key); ?>" <?php selected($c->stage, $key); ?>><?php echo esc_html($label); ?></option>
-										<?php endforeach; ?>
-									</select>
-								</form>
-								<?php echo self::render_action_chip(self::get_action_state($c)); ?>
-							</td>
 							<td class="cbnexus-admin-meta" style="max-width:260px;">
 								<?php $note_text = $c->notes ?: '—'; ?>
 								<div title="<?php echo esc_attr($c->notes ?: ''); ?>" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">
