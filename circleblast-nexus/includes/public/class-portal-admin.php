@@ -412,6 +412,41 @@ final class CBNexus_Portal_Admin {
 			}
 		}
 
+		// Rich notice listing everything that fired as a result of a stage change.
+		if ($notice === 'stage_changed') {
+			$cid    = absint($_GET['candidate_id'] ?? 0);
+			$bundle = $cid ? get_transient('cbnexus_portal_stage_change_' . $cid) : null;
+			if ($cid) { delete_transient('cbnexus_portal_stage_change_' . $cid); }
+
+			if (!is_array($bundle) || empty($bundle['events'])) {
+				// Fallback if transient expired (shouldn't normally happen).
+				echo '<div class="cbnexus-portal-notice cbnexus-notice-success">Candidate stage updated.</div>';
+				return;
+			}
+
+			$icon_map = [
+				'stage_change'        => '➡️',
+				'email_sent'          => '✉️',
+				'email_skipped'       => '⚠️',
+				'feedback_received'   => '💬',
+				'council_review_sent' => '👥',
+			];
+
+			$header = 'Stage updated for ' . $bundle['candidate_name'] . ':';
+			echo '<div class="cbnexus-portal-notice cbnexus-notice-success" style="padding:14px 18px;">';
+			echo '<div style="font-weight:600;margin-bottom:8px;">' . esc_html($header) . '</div>';
+			echo '<ul style="margin:0;padding:0;list-style:none;">';
+			foreach ($bundle['events'] as $ev) {
+				$icon = $icon_map[$ev['type'] ?? ''] ?? '•';
+				echo '<li style="padding:3px 0;font-size:14px;line-height:1.4;">'
+					. '<span style="display:inline-block;width:22px;">' . esc_html($icon) . '</span>'
+					. esc_html($ev['message'])
+					. '</li>';
+			}
+			echo '</ul></div>';
+			return;
+		}
+
 		// Dynamic error message for candidate-to-member conversion failures.
 		if ($notice === 'candidate_convert_failed') {
 			$cid = absint($_GET['candidate_id'] ?? 0);

@@ -480,11 +480,14 @@ final class CBNexus_Portal_Admin_Recruitment {
 			'updated_at'  => gmdate('Y-m-d H:i:s'),
 		], ['id' => $id], ['%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s'], ['%d']);
 
-		if ($old_stage !== $new_stage) {
+		$stage_changed = ($old_stage !== $new_stage);
+		if ($stage_changed) {
+			$before_id = self::get_last_event_id($id);
 			$updated = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 			if ($updated) {
 				self::run_recruitment_automations($updated, $old_stage, $new_stage);
 			}
+			self::stash_stage_change_events($id, $candidate->name, $before_id);
 		}
 
 		// Check for conversion errors to surface to the admin.
@@ -498,7 +501,9 @@ final class CBNexus_Portal_Admin_Recruitment {
 			exit;
 		}
 
-		wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', ['pa_notice' => 'candidate_saved']));
+		$args = ['pa_notice' => $stage_changed ? 'stage_changed' : 'candidate_saved'];
+		if ($stage_changed) { $args['candidate_id'] = $id; }
+		wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', $args));
 		exit;
 	}
 
@@ -558,12 +563,20 @@ final class CBNexus_Portal_Admin_Recruitment {
 			'updated_at' => gmdate('Y-m-d H:i:s'),
 		], ['id' => $id], ['%s', '%s', '%s'], ['%d']);
 
-		if ($old_stage !== $new_stage) {
+		$stage_changed = ($old_stage !== $new_stage);
+		if ($stage_changed) {
+			// Snapshot the event id high-water-mark so we can list everything
+			// the automation logs as a result of this stage change.
+			$before_id = self::get_last_event_id($id);
+
 			// Re-fetch so automations see the updated notes/stage.
 			$updated = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id));
 			if ($updated) {
 				self::run_recruitment_automations($updated, $old_stage, $new_stage);
 			}
+
+			// Stash the events that just fired for the post-redirect notice.
+			self::stash_stage_change_events($id, $candidate->name, $before_id);
 		}
 
 		// Check for conversion errors to surface to the admin.
@@ -577,8 +590,54 @@ final class CBNexus_Portal_Admin_Recruitment {
 			exit;
 		}
 
-		wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', ['pa_notice' => 'candidate_updated']));
+		$args = ['pa_notice' => $stage_changed ? 'stage_changed' : 'candidate_updated'];
+		if ($stage_changed) { $args['candidate_id'] = $id; }
+		wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', $args));
 		exit;
+	}
+
+	/**
+	 * Highest event id currently logged for this candidate — used as a
+	 * watermark so we know which events were appended during this request.
+	 */
+	private static function get_last_event_id(int $candidate_id): int {
+		global $wpdb;
+		$table = $wpdb->prefix . 'cb_candidate_events';
+		if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {
+			return 0;
+		}
+		return (int) $wpdb->get_var($wpdb->prepare(
+			"SELECT MAX(id) FROM {$table} WHERE candidate_id = %d", $candidate_id
+		));
+	}
+
+	/**
+	 * Save the list of new events as a transient for the post-redirect
+	 * pop-up notice that lists what just happened.
+	 */
+	private static function stash_stage_change_events(int $candidate_id, string $name, int $before_id): void {
+		global $wpdb;
+		$table = $wpdb->prefix . 'cb_candidate_events';
+		if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) { return; }
+
+		$rows = $wpdb->get_results($wpdb->prepare(
+			"SELECT event_type, message FROM {$table}
+			 WHERE candidate_id = %d AND id > %d ORDER BY id ASC",
+			$candidate_id, $before_id
+		)) ?: [];
+
+		$events = [];
+		foreach ($rows as $r) {
+			$events[] = [
+				'type'    => $r->event_type,
+				'message' => $r->message,
+			];
+		}
+
+		set_transient('cbnexus_portal_stage_change_' . $candidate_id, [
+			'candidate_name' => $name,
+			'events'         => $events,
+		], 60);
 	}
 
 	// ─── Recruitment Automations ────────────────────────────────────────
