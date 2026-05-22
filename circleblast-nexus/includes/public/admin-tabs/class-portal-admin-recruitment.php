@@ -222,8 +222,8 @@ final class CBNexus_Portal_Admin_Recruitment {
 			<div class="cbnexus-admin-table-wrap">
 				<table class="cbnexus-admin-table">
 					<thead><tr>
-						<th style="width:130px;">Actions</th>
-						<th style="width:130px;">Stage</th>
+						<th style="width:48px;"><span class="screen-reader-text">Actions</span></th>
+						<th style="width:170px;">Stage</th>
 						<th>Candidate</th>
 						<th>Company</th>
 						<th>Category</th>
@@ -236,9 +236,9 @@ final class CBNexus_Portal_Admin_Recruitment {
 						<tr><td colspan="8" class="cbnexus-admin-empty">No candidates yet.</td></tr>
 					<?php else : foreach ($candidates as $c) : ?>
 						<tr>
-							<td class="cbnexus-admin-actions-cell">
-								<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $c->id])); ?>" class="cbnexus-btn cbnexus-btn-outline cbnexus-btn-sm" aria-label="Edit candidate" title="Edit candidate" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;">
-									<span aria-hidden="true">✏️</span> Edit
+							<td class="cbnexus-admin-actions-cell" style="text-align:center;padding:0 4px;">
+								<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $c->id])); ?>" aria-label="Edit candidate" title="Edit candidate" style="display:inline-block;padding:4px 6px;text-decoration:none;font-size:16px;line-height:1;color:#5b2d6e;">
+									<span aria-hidden="true">✏️</span>
 								</a>
 							</td>
 							<td>
