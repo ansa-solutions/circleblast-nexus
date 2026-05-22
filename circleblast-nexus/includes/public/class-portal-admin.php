@@ -107,6 +107,9 @@ final class CBNexus_Portal_Admin {
 		if (isset($_POST['cbnexus_portal_save_onboarding_recipients'])) {
 			CBNexus_Portal_Admin_Recruitment::handle_save_onboarding_recipients();
 		}
+		if (isset($_POST['cbnexus_portal_cleanup_categories'])) {
+			CBNexus_Portal_Admin_Recruitment::handle_cleanup_categories();
+		}
 
 		// ── Matching ─────────────────────────────────────────────────────
 		if (isset($_POST['cbnexus_portal_save_rules'])) {
@@ -392,9 +395,22 @@ final class CBNexus_Portal_Admin {
 			'help_reset'              => 'Help content reset to default.',
 			'tooltips_saved'          => 'Stat tooltips saved.',
 			'tooltips_reset'          => 'All stat tooltips reset to defaults.',
+			'categories_cleaned'      => 'Categories cleaned up.',
 			'error'                   => 'An error occurred.',
 		];
 		$msg = $messages[$notice] ?? '';
+
+		// Dynamic cleanup result — pull the deletion count out of the transient.
+		if ($notice === 'categories_cleaned') {
+			$result = get_transient('cbnexus_portal_cleanup_result');
+			if (is_array($result)) {
+				delete_transient('cbnexus_portal_cleanup_result');
+				$deleted = (int) ($result['deleted'] ?? 0);
+				$msg = $deleted === 0
+					? 'No unused categories found — nothing was deleted.'
+					: sprintf('Deleted %d unused categor%s.', $deleted, $deleted === 1 ? 'y' : 'ies');
+			}
+		}
 
 		// Dynamic error message for candidate-to-member conversion failures.
 		if ($notice === 'candidate_convert_failed') {

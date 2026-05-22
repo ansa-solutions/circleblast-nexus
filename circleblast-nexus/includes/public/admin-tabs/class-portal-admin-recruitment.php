@@ -1162,7 +1162,8 @@ final class CBNexus_Portal_Admin_Recruitment {
 			<div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
 				<a href="<?php echo esc_url(wp_nonce_url(CBNexus_Portal_Admin::admin_url('recruitment', ['cbnexus_portal_send_needs_blast' => '1']), 'cbnexus_portal_needs_blast', '_panonce')); ?>" class="cbnexus-btn cbnexus-btn-accent" onclick="return confirm('Send recruitment needs to all active members?');">📧 Send to Members</a>
 				<?php if ($last_blast) : ?><span class="cbnexus-admin-meta">Last sent: <?php echo esc_html(date_i18n('M j, Y', strtotime($last_blast))); ?></span><?php endif; ?>
-				<form method="post" style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+				<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment', ['cleanup_categories' => 'preview'])); ?>" class="cbnexus-btn cbnexus-btn-outline cbnexus-btn-sm" style="margin-left:auto;">🧹 Clean Up Unused</a>
+				<form method="post" style="display:flex;align-items:center;gap:8px;">
 					<?php wp_nonce_field('cbnexus_portal_save_needs_schedule', '_panonce_schedule'); ?>
 					<label class="cbnexus-admin-meta" style="white-space:nowrap;">Auto-send:</label>
 					<select name="needs_schedule" class="cbnexus-input" style="width:auto;">
@@ -1173,6 +1174,13 @@ final class CBNexus_Portal_Admin_Recruitment {
 					<button type="submit" name="cbnexus_portal_save_needs_schedule" value="1" class="cbnexus-btn cbnexus-btn-outline cbnexus-btn-sm">Save</button>
 				</form>
 			</div>
+
+			<?php
+			$cleanup_view = sanitize_key($_GET['cleanup_categories'] ?? '');
+			if ($cleanup_view === 'preview') {
+				self::render_cleanup_preview();
+			}
+			?>
 		</div>
 
 		<!-- Add / Edit Form -->
@@ -1527,6 +1535,63 @@ final class CBNexus_Portal_Admin_Recruitment {
 		}
 
 		wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', ['pa_notice' => 'needs_schedule_saved']));
+		exit;
+	}
+
+	// ─── Categories Cleanup (UI) ─────────────────────────────────────
+
+	/**
+	 * Preview card listing categories the cleanup would delete + a confirm button.
+	 */
+	private static function render_cleanup_preview(): void {
+		$unused = CBNexus_Recruitment_Categories_Cleanup::find_unused();
+		$back_url = CBNexus_Portal_Admin::admin_url('recruitment');
+		?>
+		<div class="cbnexus-card" style="margin-top:12px;border:2px solid #c49a3c;">
+			<div class="cbnexus-admin-header-row">
+				<h3 style="margin:0;">🧹 Clean Up Unused Categories</h3>
+				<a href="<?php echo esc_url($back_url); ?>" class="cbnexus-btn cbnexus-btn-outline cbnexus-btn-sm">← Close</a>
+			</div>
+			<p class="cbnexus-admin-meta" style="margin:8px 0 14px;">
+				A category is "unused" if no active pipeline candidate AND no member is tagged with it.
+				Accepted and declined candidates are ignored.
+				<strong>This action cannot be undone.</strong>
+			</p>
+
+			<?php if (empty($unused)) : ?>
+				<p style="font-size:14px;color:#166534;background:#f0fdf4;padding:12px 16px;border-radius:8px;border:1px solid #bbf7d0;margin:0;">
+					✅ Nothing to clean up — every category is referenced.
+				</p>
+			<?php else : ?>
+				<p style="font-size:14px;color:#333;margin:0 0 10px;">
+					<strong><?php echo count($unused); ?></strong> categor<?php echo count($unused) === 1 ? 'y' : 'ies'; ?> will be deleted:
+				</p>
+				<ul style="margin:0 0 16px;padding:0 0 0 18px;font-size:13px;color:#333;max-height:300px;overflow-y:auto;">
+					<?php foreach ($unused as $cat) : ?>
+						<li style="margin:2px 0;"><?php echo esc_html($cat->title); ?></li>
+					<?php endforeach; ?>
+				</ul>
+				<form method="post" action="">
+					<?php wp_nonce_field('cbnexus_portal_cleanup_categories', '_panonce_cleanup'); ?>
+					<button type="submit" name="cbnexus_portal_cleanup_categories" value="1" class="cbnexus-btn cbnexus-btn-primary" style="background:#dc2626;border-color:#dc2626;" onclick="return confirm('Delete <?php echo (int) count($unused); ?> unused categories? This cannot be undone.');">
+						Delete <?php echo (int) count($unused); ?> Categor<?php echo count($unused) === 1 ? 'y' : 'ies'; ?>
+					</button>
+					<a href="<?php echo esc_url($back_url); ?>" class="cbnexus-btn cbnexus-btn-outline" style="margin-left:8px;">Cancel</a>
+				</form>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	public static function handle_cleanup_categories(): void {
+		if (!wp_verify_nonce(wp_unslash($_POST['_panonce_cleanup'] ?? ''), 'cbnexus_portal_cleanup_categories')) { return; }
+		if (!current_user_can('cbnexus_manage_members')) { return; }
+
+		$result = CBNexus_Recruitment_Categories_Cleanup::delete_unused();
+
+		set_transient('cbnexus_portal_cleanup_result', $result, 60);
+
+		wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', ['pa_notice' => 'categories_cleaned']));
 		exit;
 	}
 }

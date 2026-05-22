@@ -115,6 +115,9 @@ final class CBNexus_Autoloader {
 		// Recruitment Settings (configurable thresholds + handoff email)
 		'CBNexus_Recruitment_Settings'         => 'includes/recruitment/class-recruitment-settings.php',
 
+		// Recruitment Categories Cleanup (browser-runnable maintenance)
+		'CBNexus_Recruitment_Categories_Cleanup' => 'includes/recruitment/class-recruitment-categories-cleanup.php',
+
 		// Tokens (universal email action system)
 		'CBNexus_Token_Service' => 'includes/tokens/class-token-service.php',
 		'CBNexus_Token_Router'  => 'includes/tokens/class-token-router.php',
