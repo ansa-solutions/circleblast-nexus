@@ -184,12 +184,10 @@ final class CBNexus_Member_Service {
 			}
 		}
 
-		// Validate industry against taxonomy.
-		if (!empty($profile_data['cb_industry'])) {
-			if (!self::is_valid_industry($profile_data['cb_industry'])) {
-				$errors[] = 'Invalid industry selection.';
-			}
-		}
+		// Industry is freeform text — any non-empty value is accepted. It is
+		// intentionally NOT constrained to the taxonomy so candidates coming
+		// through recruitment (and members editing their own profile) can enter
+		// whatever describes them.
 
 		// Validate profile-specific fields.
 		$errors = array_merge($errors, self::validate_profile_data($profile_data));
@@ -270,17 +268,6 @@ final class CBNexus_Member_Service {
 		}
 
 		return $errors;
-	}
-
-	/**
-	 * Check if an industry value is in the taxonomy.
-	 *
-	 * @param string $industry Industry name.
-	 * @return bool
-	 */
-	public static function is_valid_industry(string $industry): bool {
-		$taxonomy = get_option('cbnexus_industry_taxonomy', []);
-		return in_array($industry, $taxonomy, true);
 	}
 
 	/**

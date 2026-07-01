@@ -42,6 +42,28 @@ final class CBNexus_Migration_Runner {
 	}
 
 	/**
+	 * Whether any registered migration has not yet been applied.
+	 *
+	 * Cheap enough to call on every admin request: one option read plus an
+	 * array-key check per migration. Lets the plugin self-heal after deploys
+	 * that update files without firing the activation hook (git pull / FTP /
+	 * `wp plugin update`), for this and every future migration — no version
+	 * bump required.
+	 */
+	public static function has_pending(): bool {
+		$applied = get_option(CBNEXUS_OPTION_MIGRATIONS, []);
+		if (!is_array($applied)) {
+			return true;
+		}
+		foreach (self::get_migrations() as $id => $meta) {
+			if (empty($applied[$id])) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * List of available migrations in execution order.
 	 *
 	 * @return array<string, array{file:string,class:string,method:string}>
@@ -153,6 +175,11 @@ final class CBNexus_Migration_Runner {
 				'class'  => 'CBNexus_Migration_021_Create_Feedback',
 				'method' => 'up',
 			],
+			'022_matching_fixes' => [
+				'file'   => CBNEXUS_PLUGIN_DIR . 'includes/migrations/versions/022-matching-fixes.php',
+				'class'  => 'CBNexus_Migration_022_Matching_Fixes',
+				'method' => 'up',
+			],
 			'023_create_member_journal' => [
 				'file'   => CBNEXUS_PLUGIN_DIR . 'includes/migrations/versions/023-create-member-journal.php',
 				'class'  => 'CBNexus_Migration_023_Create_Member_Journal',
@@ -163,9 +190,24 @@ final class CBNexus_Migration_Runner {
 				'class'  => 'CBNexus_Migration_024_Add_Meeting_Type',
 				'method' => 'up',
 			],
+			'025_referral_inbox' => [
+				'file'   => CBNEXUS_PLUGIN_DIR . 'includes/migrations/versions/025-referral-inbox.php',
+				'class'  => 'CBNexus_Migration_025_Referral_Inbox',
+				'method' => 'up',
+			],
+			'026_add_meeting_notes_visibility' => [
+				'file'   => CBNEXUS_PLUGIN_DIR . 'includes/migrations/versions/026-add-meeting-notes-visibility.php',
+				'class'  => 'CBNexus_Migration_026_Add_Meeting_Notes_Visibility',
+				'method' => 'up',
+			],
 			'027_create_candidate_events' => [
 				'file'   => CBNEXUS_PLUGIN_DIR . 'includes/migrations/versions/027-create-candidate-events.php',
 				'class'  => 'CBNexus_Migration_027_Create_Candidate_Events',
+				'method' => 'up',
+			],
+			'028_add_candidate_title' => [
+				'file'   => CBNEXUS_PLUGIN_DIR . 'includes/migrations/versions/028-add-candidate-title.php',
+				'class'  => 'CBNexus_Migration_028_Add_Candidate_Title',
 				'method' => 'up',
 			],
 		];

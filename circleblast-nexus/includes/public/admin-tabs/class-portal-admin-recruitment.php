@@ -185,6 +185,10 @@ final class CBNexus_Portal_Admin_Recruitment {
 						<input type="text" name="company" />
 					</div>
 					<div>
+						<label>Job Title</label>
+						<input type="text" name="title" />
+					</div>
+					<div>
 						<label>Industry</label>
 						<input type="text" name="industry" />
 					</div>
@@ -317,6 +321,22 @@ final class CBNexus_Portal_Admin_Recruitment {
 				<a href="<?php echo esc_url(CBNexus_Portal_Admin::admin_url('recruitment')); ?>" class="cbnexus-btn cbnexus-btn-outline cbnexus-btn-sm">← Back</a>
 			</div>
 
+			<?php
+			// Acceptance was attempted but the candidate is missing fields needed
+			// to create their member account — show exactly what to fill in.
+			$accept_missing = get_transient('cbnexus_recruit_accept_missing_' . $id);
+			if (is_array($accept_missing) && !empty($accept_missing)) :
+				delete_transient('cbnexus_recruit_accept_missing_' . $id);
+			?>
+				<div class="cbnexus-portal-notice cbnexus-notice-error" style="margin-top:12px;">
+					<strong>Can't accept <?php echo esc_html($c->name); ?> yet.</strong>
+					Accepting a candidate creates their member account, which needs:
+					<strong><?php echo esc_html(implode(', ', $accept_missing)); ?></strong>.
+					Fill in the missing field<?php echo count($accept_missing) === 1 ? '' : 's'; ?> below,
+					then set the Stage to <em>Accepted</em> and save.
+				</div>
+			<?php endif; ?>
+
 			<form method="post" style="max-width:600px;margin-top:12px;">
 				<?php wp_nonce_field('cbnexus_portal_save_candidate'); ?>
 				<input type="hidden" name="candidate_id" value="<?php echo esc_attr($c->id); ?>" />
@@ -338,9 +358,16 @@ final class CBNexus_Portal_Admin_Recruitment {
 							<input type="text" name="company" value="<?php echo esc_attr($c->company); ?>" class="cbnexus-input" style="width:100%;" />
 						</div>
 						<div style="flex:1;">
+							<label style="display:block;font-weight:600;margin-bottom:4px;">Job Title</label>
+							<input type="text" name="title" value="<?php echo esc_attr($c->title ?? ''); ?>" class="cbnexus-input" style="width:100%;" />
+						</div>
+					</div>
+					<div style="display:flex;gap:12px;">
+						<div style="flex:1;">
 							<label style="display:block;font-weight:600;margin-bottom:4px;">Industry</label>
 							<input type="text" name="industry" value="<?php echo esc_attr($c->industry); ?>" class="cbnexus-input" style="width:100%;" />
 						</div>
+						<div style="flex:1;"></div>
 					</div>
 					<div style="display:flex;gap:12px;">
 						<div style="flex:1;">
@@ -454,6 +481,26 @@ final class CBNexus_Portal_Admin_Recruitment {
 
 	// ─── Action Handlers ────────────────────────────────────────────────
 
+	/**
+	 * Sanitize the shared candidate contact fields from $_POST.
+	 *
+	 * Single source of truth for the add/edit handlers so the field list,
+	 * unslashing, and sanitizers can't drift between them. Returns an
+	 * associative array whose key order matches the wpdb format list
+	 * ['%s','%s','%s','%s','%s'].
+	 *
+	 * @return array{name:string,email:string,company:string,title:string,industry:string}
+	 */
+	private static function sanitize_candidate_fields(): array {
+		return [
+			'name'     => sanitize_text_field(wp_unslash($_POST['name'] ?? '')),
+			'email'    => sanitize_email(wp_unslash($_POST['email'] ?? '')),
+			'company'  => sanitize_text_field(wp_unslash($_POST['company'] ?? '')),
+			'title'    => sanitize_text_field(wp_unslash($_POST['title'] ?? '')),
+			'industry' => sanitize_text_field(wp_unslash($_POST['industry'] ?? '')),
+		];
+	}
+
 	public static function handle_save_candidate(): void {
 		if (!wp_verify_nonce(wp_unslash($_POST['_wpnonce'] ?? ''), 'cbnexus_portal_save_candidate')) { return; }
 		if (!current_user_can('cbnexus_manage_members')) { return; }
@@ -468,17 +515,35 @@ final class CBNexus_Portal_Admin_Recruitment {
 
 		$old_stage = $candidate->stage;
 
-		$wpdb->update($table, [
-			'name'        => sanitize_text_field(wp_unslash($_POST['name'] ?? '')),
-			'email'       => sanitize_email($_POST['email'] ?? ''),
-			'company'     => sanitize_text_field(wp_unslash($_POST['company'] ?? '')),
-			'industry'    => sanitize_text_field(wp_unslash($_POST['industry'] ?? '')),
+		$fields = self::sanitize_candidate_fields();
+
+		// Gate acceptance: accepting a candidate creates their member account,
+		// which needs enough data. If anything is missing, don't accept yet —
+		// keep the current stage and send the recruiter back here to complete it.
+		$accept_blocked = false;
+		if ($new_stage === 'accepted' && $old_stage !== 'accepted') {
+			$blockers = self::get_member_conversion_blockers((object) $fields);
+			if (!empty($blockers)) {
+				$accept_blocked = true;
+				$new_stage = $old_stage; // hold the candidate where it is
+				set_transient('cbnexus_recruit_accept_missing_' . $id, $blockers, 120);
+			}
+		}
+
+		$wpdb->update($table, array_merge($fields, [
 			'category_id' => absint($_POST['category_id'] ?? 0) ?: null,
 			'referrer_id' => absint($_POST['referrer_id'] ?? 0) ?: null,
 			'stage'       => $new_stage,
 			'notes'       => sanitize_textarea_field(wp_unslash($_POST['notes'] ?? '')),
 			'updated_at'  => gmdate('Y-m-d H:i:s'),
-		], ['id' => $id], ['%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s'], ['%d']);
+		]), ['id' => $id], ['%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s'], ['%d']);
+
+		// The recruiter tried to accept but the account can't be created yet —
+		// bounce back to the edit form where the missing-fields banner renders.
+		if ($accept_blocked) {
+			wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $id]));
+			exit;
+		}
 
 		$stage_changed = ($old_stage !== $new_stage);
 		if ($stage_changed) {
@@ -514,18 +579,14 @@ final class CBNexus_Portal_Admin_Recruitment {
 		global $wpdb;
 		$now = gmdate('Y-m-d H:i:s');
 
-		$wpdb->insert($wpdb->prefix . 'cb_candidates', [
-			'name'        => sanitize_text_field($_POST['name'] ?? ''),
-			'email'       => sanitize_email($_POST['email'] ?? ''),
-			'company'     => sanitize_text_field($_POST['company'] ?? ''),
-			'industry'    => sanitize_text_field($_POST['industry'] ?? ''),
+		$wpdb->insert($wpdb->prefix . 'cb_candidates', array_merge(self::sanitize_candidate_fields(), [
 			'category_id' => absint($_POST['category_id'] ?? 0) ?: null,
 			'referrer_id' => absint($_POST['referrer_id'] ?? 0) ?: null,
 			'stage'       => 'referral',
 			'notes'       => sanitize_textarea_field(wp_unslash($_POST['notes'] ?? '')),
 			'created_at'  => $now,
 			'updated_at'  => $now,
-		], ['%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s']);
+		]), ['%s', '%s', '%s', '%s', '%s', '%d', '%d', '%s', '%s', '%s', '%s']);
 
 		// Notify referrer that their prospect was received.
 		$new_id = $wpdb->insert_id;
@@ -556,6 +617,23 @@ final class CBNexus_Portal_Admin_Recruitment {
 		if (!$candidate) { return; }
 
 		$old_stage = $candidate->stage;
+
+		// Gate acceptance from the quick stage dropdown. The dropdown only posts
+		// the stage, so validate against the stored candidate record. If the
+		// member account can't be created yet, save the notes but hold the stage
+		// and send the recruiter to the edit form to fill in what's missing.
+		if ($new_stage === 'accepted' && $old_stage !== 'accepted') {
+			$blockers = self::get_member_conversion_blockers($candidate);
+			if (!empty($blockers)) {
+				$wpdb->update($table, [
+					'notes'      => $notes,
+					'updated_at' => gmdate('Y-m-d H:i:s'),
+				], ['id' => $id], ['%s', '%s'], ['%d']);
+				set_transient('cbnexus_recruit_accept_missing_' . $id, $blockers, 120);
+				wp_safe_redirect(CBNexus_Portal_Admin::admin_url('recruitment', ['edit_candidate' => $id]));
+				exit;
+			}
+		}
 
 		$wpdb->update($table, [
 			'stage'      => $new_stage,
@@ -663,6 +741,39 @@ final class CBNexus_Portal_Admin_Recruitment {
 	 *   - Declined → send recruit_declined to the candidate as polite closure
 	 */
 	public static function run_recruitment_automations(object $candidate, string $old_stage, string $new_stage): void {
+		// ── Acceptance guard (shared by every caller) ──
+		// Accepting creates a member account, which needs a minimum set of data.
+		// If it's missing, refuse the transition here — revert the stored stage
+		// to where it was, record why, and stash the missing fields — rather than
+		// letting convert_candidate_to_member fail silently and leave the
+		// candidate stranded at "accepted". The portal handlers pre-check and
+		// redirect to the edit form for a nicer prompt; this backstop covers the
+		// WP-admin page and any future caller. The convert-error transient is
+		// what those surfaces read to show the reason.
+		if ($new_stage === 'accepted' && $old_stage !== 'accepted') {
+			$blockers = self::get_member_conversion_blockers($candidate);
+			if (!empty($blockers)) {
+				global $wpdb;
+				$wpdb->update(
+					$wpdb->prefix . 'cb_candidates',
+					['stage' => $old_stage, 'updated_at' => gmdate('Y-m-d H:i:s')],
+					['id' => (int) $candidate->id],
+					['%s', '%s'],
+					['%d']
+				);
+				set_transient('cbnexus_recruit_accept_missing_' . $candidate->id, $blockers, 120);
+				set_transient(
+					'cbnexus_recruit_convert_error_' . $candidate->id,
+					'Missing required info: ' . implode(', ', $blockers) . '.',
+					120
+				);
+				CBNexus_Candidate_Event_Repository::log((int) $candidate->id, 'stage_change',
+					'Acceptance blocked — missing: ' . implode(', ', $blockers),
+					['from' => $old_stage, 'to' => $old_stage]);
+				return;
+			}
+		}
+
 		$referrer        = $candidate->referrer_id ? get_userdata($candidate->referrer_id) : null;
 		$stage_labels    = self::$recruit_stages;
 		$candidate_first = explode(' ', trim($candidate->name))[0] ?? $candidate->name;
@@ -902,6 +1013,49 @@ final class CBNexus_Portal_Admin_Recruitment {
 	}
 
 	/**
+	 * Determine what — if anything — prevents this candidate from being turned
+	 * into a member account. Mirrors the requirements of
+	 * CBNexus_Member_Service::create_member() so acceptance never silently fails.
+	 *
+	 * Returns a list of human-readable missing fields (empty = ready to accept).
+	 * Only the values relevant to member creation are examined ($candidate may be
+	 * a partial object carrying just name/email/company/title/industry).
+	 *
+	 * @return string[]
+	 */
+	private static function get_member_conversion_blockers(object $candidate): array {
+		$missing = [];
+
+		$email = trim((string) ($candidate->email ?? ''));
+		if ($email === '' || !is_email($email)) {
+			$missing[] = 'a valid email address';
+			// Without a usable email we can't tell new-vs-existing; stop here.
+			return $missing;
+		}
+
+		// When the email already belongs to a WP account, conversion promotes
+		// that account instead of creating one, so the new-user field
+		// requirements below don't apply.
+		if (email_exists($email)) {
+			return $missing;
+		}
+
+		$name  = trim((string) ($candidate->name ?? ''));
+		$parts = preg_split('/\s+/', $name, 2, PREG_SPLIT_NO_EMPTY);
+		if (empty($parts[0])) {
+			$missing[] = 'a name';
+		} elseif (empty($parts[1])) {
+			$missing[] = 'a last name (enter the full name)';
+		}
+
+		if (trim((string) ($candidate->company ?? '')) === '')  { $missing[] = 'company'; }
+		if (trim((string) ($candidate->title ?? '')) === '')    { $missing[] = 'job title'; }
+		if (trim((string) ($candidate->industry ?? '')) === '') { $missing[] = 'industry'; }
+
+		return $missing;
+	}
+
+	/**
 	 * Convert an accepted candidate into a full The Circle member.
 	 *
 	 * @return array{user_id: int|null, errors: string[]}
@@ -924,6 +1078,7 @@ final class CBNexus_Portal_Admin_Recruitment {
 
 		$profile_data = [
 			'cb_company'       => $candidate->company ?: '',
+			'cb_title'         => ($candidate->title ?? '') ?: '',
 			'cb_industry'      => $candidate->industry ?: '',
 			'cb_referred_by'   => $candidate->referrer_id ? (get_userdata($candidate->referrer_id)->display_name ?? '') : '',
 			'cb_ambassador_id' => $candidate->referrer_id ?: '',

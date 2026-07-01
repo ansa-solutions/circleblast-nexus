@@ -53,13 +53,14 @@ final class CBNexus_Admin_Recruitment {
 			'name'        => sanitize_text_field($_POST['name'] ?? ''),
 			'email'       => sanitize_email($_POST['email'] ?? ''),
 			'company'     => sanitize_text_field($_POST['company'] ?? ''),
+			'title'       => sanitize_text_field(wp_unslash($_POST['title'] ?? '')),
 			'industry'    => sanitize_text_field($_POST['industry'] ?? ''),
 			'referrer_id' => absint($_POST['referrer_id'] ?? 0) ?: null,
 			'stage'       => 'referral',
 			'notes'       => sanitize_textarea_field(wp_unslash($_POST['notes'] ?? '')),
 			'created_at'  => $now,
 			'updated_at'  => $now,
-		], ['%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s']);
+		], ['%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s']);
 
 		// Notify referrer that their prospect was received.
 		$new_id = $wpdb->insert_id;
@@ -177,6 +178,7 @@ final class CBNexus_Admin_Recruitment {
 					<div><label style="display:block;font-size:12px;color:#666;"><?php esc_html_e('Name*', 'circleblast-nexus'); ?></label><input type="text" name="name" required class="regular-text" /></div>
 					<div><label style="display:block;font-size:12px;color:#666;"><?php esc_html_e('Email', 'circleblast-nexus'); ?></label><input type="email" name="email" class="regular-text" /></div>
 					<div><label style="display:block;font-size:12px;color:#666;"><?php esc_html_e('Company', 'circleblast-nexus'); ?></label><input type="text" name="company" /></div>
+					<div><label style="display:block;font-size:12px;color:#666;"><?php esc_html_e('Job Title', 'circleblast-nexus'); ?></label><input type="text" name="title" /></div>
 					<div><label style="display:block;font-size:12px;color:#666;"><?php esc_html_e('Industry', 'circleblast-nexus'); ?></label><input type="text" name="industry" /></div>
 					<div><label style="display:block;font-size:12px;color:#666;"><?php esc_html_e('Referred By', 'circleblast-nexus'); ?></label>
 						<select name="referrer_id"><option value="0">—</option>

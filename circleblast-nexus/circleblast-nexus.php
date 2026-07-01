@@ -107,6 +107,19 @@ add_action('cbnexus_token_cleanup', ['CBNexus_Token_Service', 'cleanup']);
 add_action('cbnexus_recruitment_focus_rotate', ['CBNexus_Recruitment_Coverage_Service', 'cron_rotate_focus']);
 
 /**
+ * Self-healing migrations: activation runs them, but deploys that only sync
+ * files (git pull / FTP / `wp plugin update`) never fire the activation hook.
+ * Run any pending migrations on the first admin request after such a deploy so
+ * the schema never lags behind the code. Priority 1 so tables/columns exist
+ * before other admin_init handlers touch them.
+ */
+add_action('admin_init', function (): void {
+	if (class_exists('CBNexus_Migration_Runner') && CBNexus_Migration_Runner::has_pending()) {
+		CBNexus_Migration_Runner::run();
+	}
+}, 1);
+
+/**
  * Initialize admin features when in admin context.
  */
 if (is_admin()) {
