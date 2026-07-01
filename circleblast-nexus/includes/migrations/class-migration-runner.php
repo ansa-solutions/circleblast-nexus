@@ -27,16 +27,19 @@ final class CBNexus_Migration_Runner {
 
 			$ok = self::apply_one($id, $meta);
 
-			// Record applied state only on success.
+			// Record applied state only on success. On failure, log (apply_one
+			// already did) and continue to the next migration rather than
+			// aborting the whole chain — these migrations are independent
+			// (different tables/options), so one legacy migration failing on a
+			// particular database must not permanently block later schema
+			// changes from applying. The failed one stays unrecorded and is
+			// retried on the next run.
 			if ($ok) {
 				$applied[$id] = [
 					'applied_at_gmt' => gmdate('Y-m-d H:i:s'),
 					'version'        => CBNEXUS_VERSION,
 				];
 				update_option(CBNEXUS_OPTION_MIGRATIONS, $applied, false);
-			} else {
-				// Stop at first failure to avoid partial/unknown state.
-				break;
 			}
 		}
 	}
