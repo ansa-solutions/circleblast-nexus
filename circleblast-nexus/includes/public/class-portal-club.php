@@ -115,6 +115,8 @@ final class CBNexus_Portal_Club {
 				</div>
 			</div>
 
+			<?php self::render_asks_wins_board(); ?>
+
 			<div class="cbnexus-dash-cols">
 				<!-- Top Connectors -->
 				<div class="cbnexus-card">
@@ -165,6 +167,67 @@ final class CBNexus_Portal_Club {
 				</div>
 			</div>
 			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	// ─── Asks & Wins Board (monthly meeting) ──────────────────────
+
+	/**
+	 * Fetch this month's shared asks & wins, split by type.
+	 *
+	 * @return array{asks:array,wins:array,label:string}
+	 */
+	private static function get_asks_wins(): array {
+		$since   = current_time('Y-m-01');
+		$entries = class_exists('CBNexus_Journal_Repository')
+			? CBNexus_Journal_Repository::get_shared_since(['ask', 'win'], $since, 100)
+			: [];
+
+		$asks = $wins = [];
+		foreach ($entries as $e) {
+			if ($e->entry_type === 'ask') { $asks[] = $e; }
+			else { $wins[] = $e; }
+		}
+		return ['asks' => $asks, 'wins' => $wins, 'label' => date_i18n('F')];
+	}
+
+	/**
+	 * Render the two-column "Asks & Wins" board on the Club page.
+	 * Populated by members via the header "Win / Ask" action.
+	 */
+	private static function render_asks_wins_board(): void {
+		$data = self::get_asks_wins();
+		?>
+		<div class="cbnexus-card cbnexus-awb">
+			<div class="cbnexus-awb-head">
+				<h3 style="margin:0;">🙌 <?php echo esc_html(sprintf(__('%s Asks & Wins', 'circleblast-nexus'), $data['label'])); ?></h3>
+				<span class="cbnexus-text-muted" style="font-size:12px;"><?php esc_html_e('Shared by members for this month\'s meeting', 'circleblast-nexus'); ?></span>
+			</div>
+			<div class="cbnexus-awb-cols">
+				<div class="cbnexus-awb-col">
+					<div class="cbnexus-awb-col-title cbnexus-awb-col-title--win">🏆 <?php esc_html_e('Wins', 'circleblast-nexus'); ?> <span class="cbnexus-awb-count"><?php echo esc_html(count($data['wins'])); ?></span></div>
+					<?php if (empty($data['wins'])) : ?>
+						<p class="cbnexus-text-muted cbnexus-awb-empty"><?php esc_html_e('No wins shared yet this month.', 'circleblast-nexus'); ?></p>
+					<?php else : foreach ($data['wins'] as $w) : ?>
+						<div class="cbnexus-awb-item">
+							<p><?php echo esc_html($w->content); ?></p>
+							<span class="cbnexus-awb-author">— <?php echo esc_html($w->display_name ?: __('A member', 'circleblast-nexus')); ?></span>
+						</div>
+					<?php endforeach; endif; ?>
+				</div>
+				<div class="cbnexus-awb-col">
+					<div class="cbnexus-awb-col-title cbnexus-awb-col-title--ask">🙋 <?php esc_html_e('Asks', 'circleblast-nexus'); ?> <span class="cbnexus-awb-count"><?php echo esc_html(count($data['asks'])); ?></span></div>
+					<?php if (empty($data['asks'])) : ?>
+						<p class="cbnexus-text-muted cbnexus-awb-empty"><?php esc_html_e('No asks shared yet this month.', 'circleblast-nexus'); ?></p>
+					<?php else : foreach ($data['asks'] as $a) : ?>
+						<div class="cbnexus-awb-item">
+							<p><?php echo esc_html($a->content); ?></p>
+							<span class="cbnexus-awb-author">— <?php echo esc_html($a->display_name ?: __('A member', 'circleblast-nexus')); ?></span>
+						</div>
+					<?php endforeach; endif; ?>
+				</div>
+			</div>
 		</div>
 		<?php
 	}
@@ -284,6 +347,7 @@ final class CBNexus_Portal_Club {
 		$back_url = add_query_arg('section', 'club', $portal_url);
 		$new_members = CBNexus_Club_Tips_Service::get_new_members(5);
 		$visitors    = CBNexus_Club_Tips_Service::get_visitors(5);
+		$aw          = self::get_asks_wins();
 		$has_cov     = class_exists('CBNexus_Recruitment_Coverage_Service');
 		$cov_summary = $has_cov ? CBNexus_Recruitment_Coverage_Service::get_summary() : ['total' => 0];
 		$cov_gaps    = $has_cov ? CBNexus_Recruitment_Coverage_Service::get_focus_categories(5) : [];
@@ -376,6 +440,31 @@ final class CBNexus_Portal_Club {
 						<div style="text-align:center"><span class="cbnexus-present-month-num"><?php echo esc_html($month['notes_rate']); ?>%</span><span class="cbnexus-present-month-label">Notes completion</span></div>
 					</div>
 				</div>
+
+				<?php if (!empty($aw['asks']) || !empty($aw['wins'])) : ?>
+				<!-- Section: This Month's Asks & Wins (member-submitted) -->
+				<div class="cbnexus-present-section" data-section="asks-wins">
+					<h2 class="cbnexus-present-sh">🙌 <?php echo esc_html(sprintf(__('%s Asks & Wins', 'circleblast-nexus'), $aw['label'])); ?></h2>
+					<div class="cbnexus-present-cols">
+						<div>
+							<h3 style="font-size:20px;margin:0 0 12px;color:<?php echo esc_attr($secondary); ?>;">🏆 <?php esc_html_e('Wins', 'circleblast-nexus'); ?></h3>
+							<?php if (empty($aw['wins'])) : ?>
+								<p style="color:rgba(255,255,255,.5);"><?php esc_html_e('No wins shared this month.', 'circleblast-nexus'); ?></p>
+							<?php else : foreach ($aw['wins'] as $w) : ?>
+								<div class="cbnexus-present-wcard" style="margin-bottom:12px;"><?php echo esc_html(wp_trim_words($w->content, 34)); ?><?php if ($w->display_name) : ?><br/><em>— <?php echo esc_html($w->display_name); ?></em><?php endif; ?></div>
+							<?php endforeach; endif; ?>
+						</div>
+						<div>
+							<h3 style="font-size:20px;margin:0 0 12px;color:<?php echo esc_attr(self::lighten_hex($secondary, 20)); ?>;">🙋 <?php esc_html_e('Asks', 'circleblast-nexus'); ?></h3>
+							<?php if (empty($aw['asks'])) : ?>
+								<p style="color:rgba(255,255,255,.5);"><?php esc_html_e('No asks shared this month.', 'circleblast-nexus'); ?></p>
+							<?php else : foreach ($aw['asks'] as $a) : ?>
+								<div class="cbnexus-present-wcard" style="margin-bottom:12px;"><?php echo esc_html(wp_trim_words($a->content, 34)); ?><?php if ($a->display_name) : ?><br/><em>— <?php echo esc_html($a->display_name); ?></em><?php endif; ?></div>
+							<?php endforeach; endif; ?>
+						</div>
+					</div>
+				</div>
+				<?php endif; ?>
 
 				<?php if (!empty($wins)) : ?>
 				<!-- Section 1: Wins (with longer text — 40 words) -->

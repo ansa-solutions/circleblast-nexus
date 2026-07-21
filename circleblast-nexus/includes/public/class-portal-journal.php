@@ -19,6 +19,7 @@ final class CBNexus_Portal_Journal {
 	/** Human-readable labels and icons per type. */
 	private static $type_meta = [
 		'win'               => ['label' => 'Win',               'icon' => '🏆', 'pill' => 'cbnexus-pill--gold-soft'],
+		'ask'               => ['label' => 'Ask',               'icon' => '🙋', 'pill' => 'cbnexus-pill--blue-soft'],
 		'insight'           => ['label' => 'Insight',           'icon' => '💡', 'pill' => 'cbnexus-pill--accent-soft'],
 		'referral_given'    => ['label' => 'Referral Given',    'icon' => '🤝', 'pill' => 'cbnexus-pill--green'],
 		'referral_received' => ['label' => 'Referral Received', 'icon' => '⭐', 'pill' => 'cbnexus-pill--blue'],
@@ -46,6 +47,15 @@ final class CBNexus_Portal_Journal {
 			'ajax_url' => admin_url('admin-ajax.php'),
 			'nonce'    => wp_create_nonce('cbnexus_journal'),
 		]);
+
+		// Quick "Share Win / Ask" header modal — reuses the journal AJAX endpoint.
+		wp_enqueue_script(
+			'cbnexus-winask',
+			CBNEXUS_PLUGIN_URL . 'assets/js/winask.js',
+			['cbnexus-journal'],
+			CBNEXUS_VERSION,
+			true
+		);
 	}
 
 	// ─── Render ────────────────────────────────────────────────────────
@@ -345,6 +355,71 @@ final class CBNexus_Portal_Journal {
 		self::render_feed($entries, $uid);
 		$html = ob_get_clean();
 		wp_send_json_success(['html' => $html]);
+	}
+
+	// ─── Quick "Share Win / Ask" modal (header action) ─────────────────
+
+	/**
+	 * Render the header button that opens the quick Win/Ask modal.
+	 * Sits next to "Know Someone?" in the portal header.
+	 */
+	public static function render_header_button(): void {
+		if (!is_user_logged_in()) { return; }
+		?>
+		<button type="button" class="cbnexus-header-link cbnexus-winask-header-btn" data-winask-open aria-label="<?php esc_attr_e('Share a win or ask', 'circleblast-nexus'); ?>" title="<?php esc_attr_e('Share a win or ask with the club', 'circleblast-nexus'); ?>">
+			<span class="cbnexus-header-link-icon">🙌</span> <?php esc_html_e('Win / Ask', 'circleblast-nexus'); ?>
+		</button>
+		<?php
+	}
+
+	/**
+	 * Render the quick Win/Ask modal. Called once per portal page load
+	 * (typically from the router alongside the other portal modals).
+	 *
+	 * Submissions are auto-shared with members and dated today, so they
+	 * appear on the Club "Asks & Wins" board for the monthly meeting.
+	 */
+	public static function render_quick_modal(): void {
+		if (!is_user_logged_in()) { return; }
+		?>
+		<!-- Win/Ask Modal Overlay -->
+		<div id="cbnexus-winask-overlay" class="cbnexus-winask-overlay"></div>
+
+		<!-- Win/Ask Modal -->
+		<div id="cbnexus-winask-modal" class="cbnexus-winask-modal" role="dialog" aria-modal="true" aria-labelledby="cbnexus-winask-title">
+			<div class="cbnexus-winask-header">
+				<h3 id="cbnexus-winask-title"><?php esc_html_e('Share with the Club', 'circleblast-nexus'); ?></h3>
+				<button type="button" class="cbnexus-winask-close" data-winask-close aria-label="<?php esc_attr_e('Close', 'circleblast-nexus'); ?>">&times;</button>
+			</div>
+			<p class="cbnexus-winask-subtitle"><?php esc_html_e('Celebrate a win or ask the group for help. Shared entries appear on the Club board and are read out at the monthly meeting.', 'circleblast-nexus'); ?></p>
+
+			<div id="cbnexus-winask-msg" class="cbnexus-winask-msg" style="display:none;"></div>
+
+			<form id="cbnexus-winask-form" autocomplete="off">
+				<div class="cbnexus-winask-type-row">
+					<label class="cbnexus-winask-type-option">
+						<input type="radio" name="entry_type" value="win" checked />
+						<span class="cbnexus-winask-type-chip cbnexus-winask-type-chip--win">🏆 <?php esc_html_e('Win', 'circleblast-nexus'); ?></span>
+					</label>
+					<label class="cbnexus-winask-type-option">
+						<input type="radio" name="entry_type" value="ask" />
+						<span class="cbnexus-winask-type-chip cbnexus-winask-type-chip--ask">🙋 <?php esc_html_e('Ask', 'circleblast-nexus'); ?></span>
+					</label>
+				</div>
+
+				<div class="cbnexus-winask-field">
+					<label for="cbnexus-winask-content" id="cbnexus-winask-content-label"><?php esc_html_e('What did you win?', 'circleblast-nexus'); ?> <span class="cbnexus-required">*</span></label>
+					<textarea id="cbnexus-winask-content" name="content" rows="3" maxlength="2000" required
+						placeholder="<?php esc_attr_e('e.g. Closed a new client this week!', 'circleblast-nexus'); ?>"></textarea>
+				</div>
+
+				<div class="cbnexus-winask-submit">
+					<button type="submit" class="cbnexus-btn cbnexus-btn-primary"><?php esc_html_e('Share with Club', 'circleblast-nexus'); ?></button>
+					<button type="button" class="cbnexus-btn cbnexus-btn-outline" data-winask-close><?php esc_html_e('Cancel', 'circleblast-nexus'); ?></button>
+				</div>
+			</form>
+		</div>
+		<?php
 	}
 
 	// ─── Dashboard card (called by CBNexus_Portal_Dashboard) ───────────

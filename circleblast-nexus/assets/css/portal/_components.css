@@ -91,6 +91,7 @@
 .cbnexus-pill--green-soft  { background: var(--cb-green-soft); color: var(--cb-green); }
 .cbnexus-pill--gold-soft   { background: var(--cb-gold-soft); color: var(--cb-gold-deep); }
 .cbnexus-pill--accent-soft { background: var(--cb-accent-soft); color: var(--cb-accent); }
+.cbnexus-pill--blue-soft   { background: var(--cb-blue-soft); color: var(--cb-blue); }
 
 /* Legacy status pill alias */
 .cbnexus-status-pill { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; color: #fff; white-space: nowrap; }

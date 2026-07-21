@@ -48,6 +48,13 @@
 			contextPlaceholder: 'e.g. deal size, who was involved, what led to the win...',
 			showMember: false,
 		},
+		ask: {
+			contentLabel: 'What do you need help with?',
+			contentPlaceholder: 'e.g. Looking for an intro to a commercial realtor, need a bookkeeper...',
+			contextLabel: 'Context / Notes',
+			contextPlaceholder: 'e.g. timeline, budget, who would be a perfect fit...',
+			showMember: false,
+		},
 		insight: {
 			contentLabel: 'What did you learn?',
 			contentPlaceholder: 'e.g. New strategy, key takeaway from a conversation...',
@@ -241,6 +248,7 @@
 	// ── stats bar update ──────────────────────────────────────────────────
 	const TYPE_META = {
 		win:               { icon: '🏆', label: 'Win',               pill: 'cbnexus-pill--gold-soft' },
+		ask:               { icon: '🙋', label: 'Ask',               pill: 'cbnexus-pill--blue-soft' },
 		insight:           { icon: '💡', label: 'Insight',           pill: 'cbnexus-pill--accent-soft' },
 		referral_given:    { icon: '🤝', label: 'Referral Given',    pill: 'cbnexus-pill--green' },
 		referral_received: { icon: '⭐', label: 'Referral Received', pill: 'cbnexus-pill--blue' },
