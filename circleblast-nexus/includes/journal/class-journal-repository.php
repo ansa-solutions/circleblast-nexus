@@ -12,7 +12,7 @@ defined('ABSPATH') || exit;
 final class CBNexus_Journal_Repository {
 
 	/** Valid entry types. */
-	const TYPES = ['win', 'insight', 'referral_given', 'referral_received', 'action'];
+	const TYPES = ['win', 'ask', 'insight', 'referral_given', 'referral_received', 'action'];
 
 	/** Valid visibility values. */
 	const VISIBILITY = ['private', 'members'];
@@ -163,5 +163,36 @@ final class CBNexus_Journal_Repository {
 			 ORDER BY entry_date DESC, id DESC LIMIT %d",
 			$member_id, $limit
 		)) ?: [];
+	}
+
+	/**
+	 * Get member-visible (shared) entries of given types since a date.
+	 * Used to build the club-wide "Asks & Wins" board for the monthly meeting.
+	 *
+	 * @param string[] $types      Entry types to include (filtered against TYPES).
+	 * @param string   $since_date Inclusive lower bound (Y-m-d) on entry_date.
+	 * @param int      $limit      Max results.
+	 * @return array Rows with an extra `display_name` column from the author.
+	 */
+	public static function get_shared_since(array $types, string $since_date, int $limit = 100): array {
+		global $wpdb;
+
+		$types = array_values(array_intersect($types, self::TYPES));
+		if (empty($types)) {
+			return [];
+		}
+
+		$placeholders = implode(', ', array_fill(0, count($types), '%s'));
+		$sql = "SELECT j.*, u.display_name
+			 FROM {$wpdb->prefix}cb_member_journal j
+			 LEFT JOIN {$wpdb->users} u ON j.member_id = u.ID
+			 WHERE j.visibility = 'members'
+			   AND j.entry_type IN ($placeholders)
+			   AND j.entry_date >= %s
+			 ORDER BY j.entry_date DESC, j.id DESC
+			 LIMIT %d";
+
+		$params = array_merge($types, [$since_date, $limit]);
+		return $wpdb->get_results($wpdb->prepare($sql, $params)) ?: [];
 	}
 }
